@@ -48,7 +48,7 @@ For per-risk mitigation status see [`risk-register.md`](risk-register.md).
 | Category | Outcome | Evidence |
 |---|---|---|
 | PR.AA — Identity & access | Per-user OAuth bearer JWT (24h); admin allowlist via `ADMIN_EMAILS` | `oauth/middleware.go`; `mcp/admin_check.go`; `kc/users/store.go` (role) |
-| PR.DS — Data security | AES-256-GCM at rest via HKDF; TLS 1.2+ in transit; bcrypt cost 12 for SSO | `kc/alerts/crypto.go`; `kc/users/store.go:139` |
+| PR.DS — Data security | AES-256-GCM at rest via HKDF; TLS 1.2+ in transit; bcrypt cost 12 for SSO | `algo2go/kite-mcp-alerts/crypto.go`; `kc/users/store.go:139` |
 | PR.PS — Platform security | Read-only filesystem on Fly.io image; minimal Alpine base; non-root user | `Dockerfile` |
 | PR.IR — Technology infrastructure resilience | Goroutine leak detection; `-race` clean across 32 packages; circuit breaker on error spike | `kc/ticker/race_flag_*_test.go`; `mcp/circuitbreaker.go` |
 | PR.PT — Protective technology | Tool-integrity manifest detects line-jumping; plugin SBOM checksums | `mcp/integrity.go`; `mcp/plugin_sbom_signature.go` |
@@ -57,17 +57,17 @@ For per-risk mitigation status see [`risk-register.md`](risk-register.md).
 
 | Category | Outcome | Evidence |
 |---|---|---|
-| DE.AE — Anomalies & events | Rolling μ+3σ baseline per user; tool-call latency tracking | `kc/audit/anomaly.go`; `mcp/observability_tool.go` |
-| DE.CM — Continuous monitoring | Per-tool error rate; per-user request rate; freeze threshold | `kc/riskguard/guard.go`; `kc/audit/anomaly_cache.go` |
-| DE.DP — Detection processes | Audit trail every tool call; admin-visible anomaly flags | `kc/audit/store.go`; `mcp/admin_tools.go` (`admin_list_anomaly_flags`) |
+| DE.AE — Anomalies & events | Rolling μ+3σ baseline per user; tool-call latency tracking | `algo2go/kite-mcp-audit/anomaly.go`; `mcp/observability_tool.go` |
+| DE.CM — Continuous monitoring | Per-tool error rate; per-user request rate; freeze threshold | `algo2go/kite-mcp-riskguard/guard.go`; `algo2go/kite-mcp-audit/anomaly_cache.go` |
+| DE.DP — Detection processes | Audit trail every tool call; admin-visible anomaly flags | `algo2go/kite-mcp-audit/store.go`; `mcp/admin_tools.go` (`admin_list_anomaly_flags`) |
 
 ## 6. Respond (RS)
 
 | Category | Outcome | Evidence |
 |---|---|---|
 | RS.MA — Management | Incident-response runbooks for 6 scenarios | `docs/incident-response.md` |
-| RS.AN — Analysis | Tool-call audit trail with `CallID`/`RequestID` correlation; per-user activity dashboard | `kc/audit/store.go`; `kc/ops/handler_admin.go` (timeline) |
-| RS.MI — Mitigation | Auto-freeze on circuit breaker trip; manual `unfreeze_user` admin tool; `ENABLE_TRADING=false` global kill switch | `kc/riskguard/circuit_limit.go`; `mcp/admin_tools.go` |
+| RS.AN — Analysis | Tool-call audit trail with `CallID`/`RequestID` correlation; per-user activity dashboard | `algo2go/kite-mcp-audit/store.go`; `kc/ops/handler_admin.go` (timeline) |
+| RS.MI — Mitigation | Auto-freeze on circuit breaker trip; manual `unfreeze_user` admin tool; `ENABLE_TRADING=false` global kill switch | `algo2go/kite-mcp-riskguard/circuit_limit.go`; `mcp/admin_tools.go` |
 | RS.CO — Communication | Telegram briefings on critical events; admin email allowlist for ops messaging | `kc/telegram/`; `docs/incident-response.md` Communication §s |
 
 ## 7. Recover (RC)

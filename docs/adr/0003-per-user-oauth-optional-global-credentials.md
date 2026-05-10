@@ -68,7 +68,7 @@ KiteAPIKey  string  // Kite API key for generating login URLs (optional: per-use
 
 When a dynamic-registration client tries to authorize without supplying
 its own credentials *and* no global `KITE_API_KEY` is configured, the
-authorize endpoint at `oauth/handlers_oauth.go:100-104` returns:
+authorize endpoint at `algo2go/kite-mcp-oauth/handlers_oauth.go:100-104` returns:
 
 ```
 "No Kite API credentials configured. Set oauth_client_id and oauth_client_secret in your MCP client config."
@@ -143,7 +143,7 @@ DEV_MODE bypass + optional global creds preserves both paths.
 
 - `app/app.go:517-525` — credential-validity gate at startup
 - `oauth/config.go:12,21` — `KiteAPIKey` documented as optional
-- `oauth/handlers_oauth.go:100-104` — authorize-endpoint guidance message
+- `algo2go/kite-mcp-oauth/handlers_oauth.go:100-104` — authorize-endpoint guidance message
 - Commit `3fee49e` (2026-02-23) — "feat: make global Kite credentials
   optional when OAuth is enabled"
 - Commit `2c5d4b2` (2026-02-23) — "fix: show login success page after

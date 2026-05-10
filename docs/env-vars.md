@@ -74,17 +74,17 @@ Note: when both `KITE_API_KEY`/`KITE_API_SECRET` are empty and
 
 All five `AUDIT_HASH_PUBLISH_*` "connection" vars must be set together to
 enable the publisher; it silently no-ops otherwise. See
-`kc/audit/hashpublish.go:78-80`.
+`algo2go/kite-mcp-audit/hashpublish.go:78-80`.
 
 | Env var | Purpose | Required | Default | Consumed by | fly.toml |
 |---|---|---|---|---|---|
-| `AUDIT_HASH_PUBLISH_ACCESS_KEY` | S3/R2 access key ID. | Opt | `` (unset) | `kc/audit/hashpublish.go:89` | no |
-| `AUDIT_HASH_PUBLISH_BUCKET` | S3/R2 bucket name for uploaded chain-tip payloads. | Opt | `` (unset) | `kc/audit/hashpublish.go:88` | no |
-| `AUDIT_HASH_PUBLISH_INTERVAL` | Go `time.ParseDuration` interval between uploads. | Opt | `1h` | `kc/audit/hashpublish.go:101` | no |
-| `AUDIT_HASH_PUBLISH_KEY` | Dedicated HMAC signing key. When unset, HMAC falls back to `OAUTH_JWT_SECRET` bytes. | Opt | `OAUTH_JWT_SECRET` | `kc/audit/hashpublish.go:108` | no |
-| `AUDIT_HASH_PUBLISH_REGION` | S3/R2 region. | Opt | `auto` | `kc/audit/hashpublish.go:91` | no |
-| `AUDIT_HASH_PUBLISH_S3_ENDPOINT` | S3-compatible endpoint URL (e.g. `https://<account>.r2.cloudflarestorage.com`). | Opt | `` (unset) | `kc/audit/hashpublish.go:87` | no |
-| `AUDIT_HASH_PUBLISH_SECRET_KEY` | S3/R2 secret access key. | Opt | `` (unset) | `kc/audit/hashpublish.go:90` | no |
+| `AUDIT_HASH_PUBLISH_ACCESS_KEY` | S3/R2 access key ID. | Opt | `` (unset) | `algo2go/kite-mcp-audit/hashpublish.go:89` | no |
+| `AUDIT_HASH_PUBLISH_BUCKET` | S3/R2 bucket name for uploaded chain-tip payloads. | Opt | `` (unset) | `algo2go/kite-mcp-audit/hashpublish.go:88` | no |
+| `AUDIT_HASH_PUBLISH_INTERVAL` | Go `time.ParseDuration` interval between uploads. | Opt | `1h` | `algo2go/kite-mcp-audit/hashpublish.go:101` | no |
+| `AUDIT_HASH_PUBLISH_KEY` | Dedicated HMAC signing key. When unset, HMAC falls back to `OAUTH_JWT_SECRET` bytes. | Opt | `OAUTH_JWT_SECRET` | `algo2go/kite-mcp-audit/hashpublish.go:108` | no |
+| `AUDIT_HASH_PUBLISH_REGION` | S3/R2 region. | Opt | `auto` | `algo2go/kite-mcp-audit/hashpublish.go:91` | no |
+| `AUDIT_HASH_PUBLISH_S3_ENDPOINT` | S3-compatible endpoint URL (e.g. `https://<account>.r2.cloudflarestorage.com`). | Opt | `` (unset) | `algo2go/kite-mcp-audit/hashpublish.go:87` | no |
+| `AUDIT_HASH_PUBLISH_SECRET_KEY` | S3/R2 secret access key. | Opt | `` (unset) | `algo2go/kite-mcp-audit/hashpublish.go:90` | no |
 
 ## Litestream (SQLite replication to R2/S3)
 

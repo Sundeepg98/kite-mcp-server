@@ -150,7 +150,7 @@ logic.
 - Adding a new tool gets all 10 layers automatically. No
   copy-paste of safety checks.
 - Each layer is independently versioned and tested. RiskGuard's
-  9-check matrix lives in `kc/riskguard/internal_checks.go`; auditing
+  9-check matrix lives in `algo2go/kite-mcp-riskguard/internal_checks.go`; auditing
   lives in `kc/audit`; billing tier logic lives in `kc/billing`.
 - The order is documented in code comments at every
   `serverOpts = append(...)` line and in `.claude/CLAUDE.md`
@@ -181,8 +181,8 @@ logic.
 - `app/wire.go:480-631` — full chain registration in order
 - `.claude/CLAUDE.md` "Middleware Chain (order matters)" — operator
   shorthand
-- `kc/riskguard/guard.go` + `internal_checks.go` — 9 RiskGuard checks
-- `kc/audit/` — buffered async audit writer + hash-chained store
+- `algo2go/kite-mcp-riskguard/guard.go` + `internal_checks.go` — 9 RiskGuard checks
+- `algo2go/kite-mcp-audit/` — buffered async audit writer + hash-chained store
 - `kc/billing/billing_test.go` — tier-gating matrix
 - `mcp/circuitbreaker*.go` — breaker state machine
 - `papertrading/middleware.go` — order interception

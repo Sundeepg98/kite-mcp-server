@@ -128,7 +128,7 @@ Telegram bot (separate from MCP transport) for:
 
 ## Source references
 
-- `kc/riskguard/` — the 8 risk checks
+- `algo2go/kite-mcp-riskguard/` — the 8 risk checks
 - `oauth/` — the OAuth + JWT layer
 - `audit/` — the tool-call audit trail
 - `app/app.go` — service wiring + middleware chain

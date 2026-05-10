@@ -17,9 +17,9 @@ We reason about five classes. Each row names the actor, their typical capability
 | A | **Unauthenticated outsider** | Public internet; no JWT, no session | `/mcp`, `/healthz`, `/oauth/*`, `/dashboard/*` | Per-IP rate limit (`app/ratelimit.go:rateLimit`); `RequireAuth` middleware (`oauth/middleware.go`); HSTS + CSP + X-Frame-Options (`app/http.go`) |
 | B | **Authenticated user — cross-tenant** | Valid JWT for own email; targets *another* user's data | All MCP tools, dashboard pages | Email-from-context scoping (`oauth.EmailFromContext`); per-user `WHERE email = ?` SQL; per-user rate limit (`app/ratelimit.go:rateLimitUser`) |
 | C | **Authenticated user — privilege escalation** | Valid JWT; targets admin-only tools or endpoints | `admin_*` MCP tools, `/admin/*` HTTP, dashboard | `adminCheck()` / `withAdminCheck()` (`mcp/admin_tools.go`); `users.role = 'admin'` DB check (`kc/users/store.go:44`); destructive tools require `confirm: true` + elicitation; **TOTP MFA on every `/admin/ops/*` request** (commits `8c19202` + `0d18593`) — see [`access-control.md`](access-control.md) §8 |
-| D | **Authenticated user — content injector** | Valid JWT; injects payloads into fields they legitimately control (watchlist names, tags, symbols) | Audit summariser, widget JSON injection | `sanitizeForLog` (`kc/audit/summarize.go:557`); `injectData` U+2028/U+2029 escape (`mcp/ext_apps.go:302-303`); CSP + nonce-less `script-src` |
+| D | **Authenticated user — content injector** | Valid JWT; injects payloads into fields they legitimately control (watchlist names, tags, symbols) | Audit summariser, widget JSON injection | `sanitizeForLog` (`algo2go/kite-mcp-audit/summarize.go:557`); `injectData` U+2028/U+2029 escape (`mcp/ext_apps.go:302-303`); CSP + nonce-less `script-src` |
 | E | **Compromised infrastructure dependency** | Adversary controls an upstream (Stripe, Fly.io, Cloudflare R2, Telegram, Kite, Anthropic/OpenAI MCP client) | Whichever component | See [`vendor-management.md`](vendor-management.md) — risk-tiered per vendor; AES-256-GCM encryption-at-rest survives R2 bucket theft; signature verification on Stripe webhooks |
-| F | **LLM prompt injection (downstream agent)** | Adversary crafts content (tool descriptions, market data, news headlines) that an LLM will read; aims to coerce the LLM into placing orders | Indirect — through any tool that returns text the LLM consumes | Tool integrity manifest (`mcp/integrity.go`); riskguard order caps & confirmation (`kc/riskguard/`); `ENABLE_TRADING=false` strips order tools on hosted instance; elicitation prompts on destructive tools |
+| F | **LLM prompt injection (downstream agent)** | Adversary crafts content (tool descriptions, market data, news headlines) that an LLM will read; aims to coerce the LLM into placing orders | Indirect — through any tool that returns text the LLM consumes | Tool integrity manifest (`mcp/integrity.go`); riskguard order caps & confirmation (`algo2go/kite-mcp-riskguard/`); `ENABLE_TRADING=false` strips order tools on hosted instance; elicitation prompts on destructive tools |
 | G | **Operator-host compromise** | Adversary runs code on the Fly.io machine | Fly.io shell, secret store | OUT OF SCOPE for this server (operator-trust assumed); see [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §4.4, [`vendor-management.md`](vendor-management.md) |
 
 Adversary G is explicitly out of scope: a self-hosted operator IS the trust anchor. The Fly.io operator is `Sundeepg98` for the hosted instance; `ADMIN_EMAILS` env var is the runtime gate.
@@ -36,7 +36,7 @@ Each surface is enumerated here so a reviewer can verify "every entry point has 
 |---|---|---|---|---|
 | Health probe | `GET /healthz`, `GET /healthz?format=json` | None (deliberate) | Per-IP | Component status; no secrets in body. See `app/http.go:handleHealthz`. |
 | OAuth metadata | `GET /.well-known/oauth-authorization-server`, `GET /.well-known/oauth-protected-resource` | None | Per-IP | RFC 8414 / 9728 endpoints. |
-| Dynamic client registration | `POST /oauth/register` | None | Per-IP (auth tier 2/sec) | Issues `client_id` + AES-encrypted `client_secret`. See `oauth/handlers.go`. |
+| Dynamic client registration | `POST /oauth/register` | None | Per-IP (auth tier 2/sec) | Issues `client_id` + AES-encrypted `client_secret`. See `algo2go/kite-mcp-oauth/handlers.go`. |
 | Authorization request | `GET /oauth/authorize` | None | Per-IP (auth tier) | Redirects browser to Kite login. PKCE S256 enforced. |
 | Token exchange | `POST /oauth/token` | Client secret | Per-IP (token tier 5/sec) | Issues bearer JWT (24h). |
 | MCP transport | `POST /mcp`, `GET /sse`, `POST /messages` | Bearer JWT | Per-IP + per-user (MCP tier 20/sec) | All MCP tool calls flow through here. See `app/http.go:724-821`. |
@@ -53,10 +53,10 @@ Every tool call is wrapped by the 10-layer middleware chain (see `ARCHITECTURE.m
 
 1. Correlation — UUID per call, threaded via `context.Value` for cross-log correlation.
 2. Timeout — 30s ceiling on every handler; cancellable.
-3. Audit — every tool call logged to `tool_calls` (SQLite) with hash-chain (`kc/audit/middleware.go`).
+3. Audit — every tool call logged to `tool_calls` (SQLite) with hash-chain (`algo2go/kite-mcp-audit/middleware.go`).
 4. Hooks — plugin before/after; isolated panic recovery.
 5. Circuit breaker — 5 errors / 30s → open; auto-half-open after timeout.
-6. RiskGuard — 8 pre-trade checks (`kc/riskguard/guard.go`).
+6. RiskGuard — 8 pre-trade checks (`algo2go/kite-mcp-riskguard/guard.go`).
 7. Tool rate limit — per-tool per-user (`place_order` 10/min, etc.).
 8. Billing — Stripe tier gating; respects `DEV_MODE`.
 9. Paper trading — opt-in interception of order tools; never reaches Kite.
@@ -132,20 +132,20 @@ Verified empirically: `Grep "EmailFromContext" mcp/` returns >40 call sites, eve
 2. Audit summariser renders "InputSummary" string
    --- attempt: \n splits the line; downstream log parser sees a fake admin row
    --- defence: sanitizeForLog replaces \n/\r/\t with literal "\\n"/"\\r"/"\\t"
-       (kc/audit/summarize.go:557)
+       (algo2go/kite-mcp-audit/summarize.go:557)
    |
    v
 3. tool_calls row is written with sanitised summary
    |
    v
 4. Hash chain link computed over the sanitised bytes
-   --- any later edit breaks the chain (HMAC-SHA256, kc/audit/store_worker.go:37)
+   --- any later edit breaks the chain (HMAC-SHA256, algo2go/kite-mcp-audit/store_worker.go:37)
 
 Attack fails at step 2. Defence-in-depth: applied inside both strVal (line
 543) and jsonString (line 419) so round-trip data from Kite responses is
 also sanitised.
 
-Test: kc/audit/summarize_test.go::TestSummarizeInput_CreateWatchlist_InjectionAttempt.
+Test: algo2go/kite-mcp-audit/summarize_test.go::TestSummarizeInput_CreateWatchlist_InjectionAttempt.
 ```
 
 ### 3.3 "Coerce LLM into placing an order via prompt-injected market data" (Adversary F)
@@ -176,7 +176,7 @@ Test: kc/audit/summarize_test.go::TestSummarizeInput_CreateWatchlist_InjectionAt
    |
    v
 5. Elicitation: server.WithElicitation requests user confirmation BEFORE
-   the broker call (mcp/elicit.go).
+   the broker call (mcp/common/elicit.go).
    --- adversary cannot answer the elicitation; user must confirm in their
        chat client
    |
@@ -203,7 +203,7 @@ Beyond the residuals already enumerated in [`threat-model.md`](threat-model.md) 
 | TM-R2 | Stolen MCP bearer JWT (24h validity) | Medium | High | User + server | Per-user rate limit caps blast radius; DPoP not adopted (SEP-1932 draft). |
 | TM-R3 | Static egress IP whitelisting bypass | Low | High | Zerodha / SEBI | Order placement requires user-side Kite-console allow-list. We document; user enforces. |
 | TM-R4 | Litestream replica corruption / outage | Low | Medium | Litestream sidecar | Monthly DR drill (`.github/workflows/dr-drill.yml`). RTO ~10min from R2; RPO ~10s. See [`recovery-plan.md`](recovery-plan.md). |
-| TM-R5 | Hash-chain external publication off-by-default | Medium | Low | Operator | Opt-in via `AUDIT_HASH_PUBLISH_*` env vars; in-DB chain still tamper-evident on its own (`kc/audit/store.go`). |
+| TM-R5 | Hash-chain external publication off-by-default | Medium | Low | Operator | Opt-in via `AUDIT_HASH_PUBLISH_*` env vars; in-DB chain still tamper-evident on its own (`algo2go/kite-mcp-audit/store.go`). |
 | TM-R6 | LLM prompt-injection through 3rd-party content | High | Medium | User + LLM client | RiskGuard caps + elicitation + `ENABLE_TRADING=false` on hosted; no upstream-content filtering. |
 | TM-R7 | mcp-remote cache theft (local file with OAuth tokens) | Low | Medium | User | User-side issue; document in `byo-api-key.md`. We HMAC-bind state to client ID. |
 | TM-R8 | Goroutine leak in long-lived ticker | Low | Low | Maintainer | `goleak.VerifyTestMain` in 8+ test files; lifecycle-tracked `Stop()` on every long-lived service. |

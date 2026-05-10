@@ -79,7 +79,7 @@
 
 | Vector | Mitigation | Residual |
 |---|---|---|
-| User denies placing an order | Tool-call audit trail (`kc/audit/store.go`) with `CallID` + `RequestID` correlation; broker-side order book is authoritative | Low |
+| User denies placing an order | Tool-call audit trail (`algo2go/kite-mcp-audit/store.go`) with `CallID` + `RequestID` correlation; broker-side order book is authoritative | Low |
 | Admin denies revoking credentials | `credential.revoked` domain event with `reason` field; append-only `domain_events` table | Low |
 | User denies consent grant/revoke | `consent_log` append-only; DPDP-compliant per `docs/dpdp-reply-templates.md` | Low |
 
@@ -87,7 +87,7 @@
 
 | Vector | Mitigation | Residual |
 |---|---|---|
-| Log line leaks PII / credentials | Redaction in audit summarizer (`kc/audit/summarize.go`); email hashed in domain events; never log API key/secret/token | Low |
+| Log line leaks PII / credentials | Redaction in audit summarizer (`algo2go/kite-mcp-audit/summarize.go`); email hashed in domain events; never log API key/secret/token | Low |
 | Error response leaks internal state | Sanitised error messages; full stack-trace logged server-side only | Low |
 | Side-channel via timing of crypto ops | Constant-time `crypto/subtle` for token comparisons; AES-GCM is constant-time per key | Low |
 | Dashboard URL exposes session ID | UUIDs (random 122-bit), TLS-only, HTTP-only cookies, SameSite=Lax | Low |

@@ -92,7 +92,7 @@ restore. Litestream's continuous WAL shipping gets RPO to roughly
 10 seconds (the configured `sync-interval` plus network).
 
 **E. Postgres later, SQLite now (kick the can).** Considered. Rejected
-because the SQLDB port (ADR 0002, `kc/alerts/db.go:13`) already
+because the SQLDB port (ADR 0002, `algo2go/kite-mcp-alerts/db.go:13`) already
 captures the dialect-portable subset; future migration is bounded
 work, not architectural rewrite. The decision to migrate can land when
 demand signals (multi-region, multi-writer, large team) actually appear.

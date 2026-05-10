@@ -42,7 +42,7 @@ Per [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §3.12: Kite handles Zerodha-si
 | Signing key | `OAUTH_JWT_SECRET` (env var) |
 | Expiry | 24 hours (`oauth/config.go:31`) |
 | Claims | `email`, `client_id`, `iat`, `exp`, `iss`, `aud` |
-| Issuer | server's own OAuth (per `oauth/handlers_oauth.go`) |
+| Issuer | server's own OAuth (per `algo2go/kite-mcp-oauth/handlers_oauth.go`) |
 | Refresh | mcp-remote auto-refreshes via OAuth flow before expiry |
 
 Token storage: in-memory (mcp-remote caches per-server in `~/.mcp-auth/`); never written to our DB.
@@ -94,7 +94,7 @@ Roles persist in the `users` table (`kc/users/store.go:44` `IsAdmin()`). Source 
 | MCP tool handler | `adminCheck()` / `withAdminCheck()` helpers | `mcp/admin_tools.go` |
 | HTTP route (admin pages) | Cookie JWT + DB role check | `kc/ops/handler_admin.go` |
 | Dashboard page (per-user) | Cookie JWT scope only (no role required) | `kc/ops/` various |
-| Sensitive admin tool | `confirm: true` parameter + elicitation | `mcp/elicit.go` |
+| Sensitive admin tool | `confirm: true` parameter + elicitation | `mcp/common/elicit.go` |
 
 Destructive admin tools wrap with two layers: the role check (above) AND an explicit `confirm: bool = true` parameter. The MCP client must echo the confirmation; the server emits an elicitation prompt. This is anti-mis-click, not anti-credential-theft per [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §4.3.
 
@@ -188,16 +188,16 @@ Every admin action is logged with the admin's email AND the target user's email.
 
 ### 5.1 Per-tool-call audit
 
-Every MCP tool call is recorded to the `tool_calls` SQLite table by the audit middleware (`kc/audit/middleware.go`). Properties:
+Every MCP tool call is recorded to the `tool_calls` SQLite table by the audit middleware (`algo2go/kite-mcp-audit/middleware.go`). Properties:
 
 | Property | Value |
 |---|---|
 | Trigger | Every tool call passes through audit middleware (chain order #3 per [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §6) |
 | Async | Buffered async writer (drops counted in `dropped_count` health surface) |
-| PII redaction | `kc/audit/sanitize.go:7` `sensitiveKeys` redacts `access_token`, `api_key`, `api_secret`, `password`, `secret`, `token` |
-| Newline sanitisation | `kc/audit/summarize.go:557` `sanitizeForLog` strips control chars |
+| PII redaction | `algo2go/kite-mcp-audit/sanitize.go:7` `sensitiveKeys` redacts `access_token`, `api_key`, `api_secret`, `password`, `secret`, `token` |
+| Newline sanitisation | `algo2go/kite-mcp-audit/summarize.go:557` `sanitizeForLog` strips control chars |
 | Email | HMAC'd in `email` column; AES-GCM'd into `email_encrypted` for authorised export |
-| Hash chain | HMAC-SHA256 chain (`kc/audit/store_worker.go:37` `computeChainLink`) |
+| Hash chain | HMAC-SHA256 chain (`algo2go/kite-mcp-audit/store_worker.go:37` `computeChainLink`) |
 | Retention | 5 years (SEBI requirement; `app/wire.go:824-841`) |
 | External anchor | Optional via `AUDIT_HASH_PUBLISH_*` (per [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §3.11) |
 | Export | CSV / JSON via `/dashboard/activity?export=csv` (admin only) |
@@ -210,13 +210,13 @@ Every successful authentication and every authorization failure is logged via sl
 
 | Event | Log line | Source |
 |---|---|---|
-| OAuth token issued | `INFO oauth: token issued email=<email>` | `oauth/handlers_oauth.go` |
+| OAuth token issued | `INFO oauth: token issued email=<email>` | `algo2go/kite-mcp-oauth/handlers_oauth.go` |
 | OAuth token expired (re-auth needed) | `WARN oauth: token expired email=<email>` | `oauth/middleware.go` |
 | RequireAuth 401 | `WARN auth: 401 path=<path> reason=<reason>` | `oauth/middleware.go` |
 | Admin action invoked | (logged in `tool_calls`; not separate slog) | `mcp/admin_tools.go` via audit middleware |
 | Per-user rate limit hit | `WARN ratelimit: blocked email=<email> tool=<tool>` | `app/ratelimit.go` |
 | Per-IP rate limit hit | `WARN ratelimit: blocked ip=<ip>` | `app/ratelimit.go` |
-| Kill switch engaged | (logged in `tool_calls` for `admin_set_kill_switch`) + `WARN riskguard: kill_switch_engaged` | `kc/riskguard/` |
+| Kill switch engaged | (logged in `tool_calls` for `admin_set_kill_switch`) + `WARN riskguard: kill_switch_engaged` | `algo2go/kite-mcp-riskguard/` |
 
 These slog lines feed `flyctl logs`. For long-term audit (SEBI-compliant), the `tool_calls` SQLite trail is the source of truth.
 
@@ -236,7 +236,7 @@ Together these provide a "who deployed what, when, and was CI green" trail that 
 - Indefinite retention (regulatory evidence).
 - Withdrawal recorded by INSERTING a `withdraw` row + stamping the original grant with `withdrawn_at`. The grant row itself is never deleted.
 
-Source: `kc/audit/consent.go`.
+Source: `algo2go/kite-mcp-audit/consent.go`.
 
 ---
 

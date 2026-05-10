@@ -24,8 +24,8 @@ language extension.
    this pattern.
 
 2. **Subprocess RPC via `hashicorp/go-plugin`**
-   (`kc/riskguard/checkrpc/`, 216 LOC; host adapter in
-   `kc/riskguard/subprocess_check.go`, 391 LOC; reference plugin in
+   (`algo2go/kite-mcp-riskguard/checkrpc/`, 216 LOC; host adapter in
+   `algo2go/kite-mcp-riskguard/subprocess_check.go`, 391 LOC; reference plugin in
    `examples/riskguard-check-plugin/main.go`). Plugins are
    independent binaries (potentially in any language). Communication
    is gob-over-stdio via Go's net/rpc. Crashes are isolated.
@@ -37,7 +37,7 @@ mechanism for cross-language plugin extension — superior to WASM
 (100ms cold-start tax), superior to Go's `plugin.Open` (Linux/macOS
 only, fragile build alignment), and complementary to in-process
 register-on-import. The evaluation explicitly recommended
-"promoting `kc/riskguard/checkrpc/` to a first-class IPC contract
+"promoting `algo2go/kite-mcp-riskguard/checkrpc/` to a first-class IPC contract
 that any subsystem can opt into."
 
 This ADR ratifies that recommendation.
@@ -46,14 +46,14 @@ This ADR ratifies that recommendation.
 
 ## Decision
 
-The `kc/riskguard/checkrpc/` package is the **canonical
+The `algo2go/kite-mcp-riskguard/checkrpc/` package is the **canonical
 cross-language plugin IPC contract** for `kite-mcp-server`. New
 plugin domains that need cross-language extension SHOULD follow the
 pattern this package establishes: gob-over-stdio netRPC via
 `hashicorp/go-plugin`, with handshake-protected magic cookies and
 forward/backward-compatible wire types.
 
-The pattern is documented in `kc/riskguard/checkrpc/README.md` §
+The pattern is documented in `algo2go/kite-mcp-riskguard/checkrpc/README.md` §
 "Adding a new plugin domain". The smoke-test discipline that
 package establishes (`types_test.go`: gob round-trip,
 forward-compat with truncated payloads, backward-compat with
@@ -61,7 +61,7 @@ extended payloads, handshake stability) is the canonical regression
 suite for any new plugin domain.
 
 Domain-specific RPC packages live alongside their host domain
-(e.g., `kc/audit/audithookrpc/` if audit-hook plugins are added,
+(e.g., `algo2go/kite-mcp-audit/audithookrpc/` if audit-hook plugins are added,
 NOT inside `checkrpc/`). `checkrpc/` itself does NOT grow into a
 generic-RPC pseudo-package; it stays the riskguard-Check wire
 contract by design. The pattern is the canonical part, not any
@@ -186,16 +186,16 @@ versionable.
 - **Reference plugin**: `examples/riskguard-check-plugin/main.go`
   (~120 LOC, including doc-comments). Compiles + runs against the
   current host.
-- **Smoke tests**: `kc/riskguard/checkrpc/types_test.go` (6 tests,
+- **Smoke tests**: `algo2go/kite-mcp-riskguard/checkrpc/types_test.go` (6 tests,
   ~140 LOC) pin gob round-trip, forward-compat, backward-compat,
   handshake stability, dispense-key contract.
-- **Integration tests**: `kc/riskguard/subprocess_check_test.go` (8
+- **Integration tests**: `algo2go/kite-mcp-riskguard/subprocess_check_test.go` (8
   tests, ~365 LOC) exercise the end-to-end host adapter:
   launch-on-missing-binary, stale-executable fallback, full
   evaluate round-trip, panic-in-plugin fails closed, concurrent
   evaluate is safe, reload reconnects, register on guard, config
   validation.
-- **Reference doc**: `kc/riskguard/checkrpc/README.md` (~270 LOC)
+- **Reference doc**: `algo2go/kite-mcp-riskguard/checkrpc/README.md` (~270 LOC)
   documents the contract surface, the "Adding a new plugin domain"
   pattern, the wire discipline, and the handshake flag-day rule.
 
@@ -203,11 +203,11 @@ versionable.
 
 ## See also
 
-- `kc/riskguard/checkrpc/README.md` — the canonical reference for
+- `algo2go/kite-mcp-riskguard/checkrpc/README.md` — the canonical reference for
   the contract.
-- `kc/riskguard/checkrpc/types_test.go` — the wire-contract
+- `algo2go/kite-mcp-riskguard/checkrpc/types_test.go` — the wire-contract
   regression suite.
-- `kc/riskguard/subprocess_check.go` — the host adapter pattern.
+- `algo2go/kite-mcp-riskguard/subprocess_check.go` — the host adapter pattern.
 - `examples/riskguard-check-plugin/main.go` — the reference
   plugin binary.
 - `.research/go-irreducible-evaluation.md` (commit `e84a8f4`) —

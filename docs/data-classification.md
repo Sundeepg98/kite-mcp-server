@@ -24,28 +24,28 @@ Tier assignment uses the **highest classification of any field**, not the averag
 
 | Data | Storage | Tier | Encryption at rest | Retention | DPDP / SEBI hook |
 |---|---|---|---|---|---|
-| Kite API key + secret | `kite_credentials` (`kc/alerts/db.go:103`) | **T1** | AES-256-GCM via `kc/alerts/crypto.go` | Until consent-withdraw or account-delete | DPDP §6 consent + §8 protection |
-| Kite access token | `kite_tokens` (`kc/alerts/db.go:95`) | **T1** | AES-256-GCM | Daily Kite expiry (~06:00 IST) | DPDP §8 |
-| OAuth client secret (issued to MCP clients) | `oauth_clients` (`kc/alerts/db.go:110`) | **T1** | AES-256-GCM | Until client revoke | DPDP §8 |
+| Kite API key + secret | `kite_credentials` (`algo2go/kite-mcp-alerts/db.go:103`) | **T1** | AES-256-GCM via `algo2go/kite-mcp-alerts/crypto.go` | Until consent-withdraw or account-delete | DPDP §6 consent + §8 protection |
+| Kite access token | `kite_tokens` (`algo2go/kite-mcp-alerts/db.go:95`) | **T1** | AES-256-GCM | Daily Kite expiry (~06:00 IST) | DPDP §8 |
+| OAuth client secret (issued to MCP clients) | `oauth_clients` (`algo2go/kite-mcp-alerts/db.go:110`) | **T1** | AES-256-GCM | Until client revoke | DPDP §8 |
 | Dashboard SSO bcrypt password hash | `users.password_hash` (`kc/users/store.go:139`) | **T1** | bcrypt cost 12 (one-way) | Until account-delete | DPDP §8 |
-| MCP session JWT | `mcp_sessions` (`kc/alerts/db.go:119`) | **T2** | None — opaque ID, secret lives in HMAC key | 7-day MCP / 24-hour bearer | DPDP §6 |
+| MCP session JWT | `mcp_sessions` (`algo2go/kite-mcp-alerts/db.go:119`) | **T2** | None — opaque ID, secret lives in HMAC key | 7-day MCP / 24-hour bearer | DPDP §6 |
 | OAuth email address | `users.email`, foreign key everywhere | **T2** | None — primary identifier; hashed when copied into domain events | Until account-delete | DPDP §6, §8 portability |
-| Tool-call audit trail | `tool_calls` (`kc/audit/store.go:193`) | **T2** | None — params summarised + redacted at write-time | 90 days default (`AUDIT_RETENTION_DAYS`, `=0` disables) | SEBI cyber audit; DPDP §8 incident response |
+| Tool-call audit trail | `tool_calls` (`algo2go/kite-mcp-audit/store.go:193`) | **T2** | None — params summarised + redacted at write-time | 90 days default (`AUDIT_RETENTION_DAYS`, `=0` disables) | SEBI cyber audit; DPDP §8 incident response |
 | Domain events (event-sourcing) | `domain_events` (`kc/eventsourcing/store.go:64`) | **T2** | None — `email_hash` column substitutes for plaintext email | Indefinite (event source-of-truth) | DPDP §6 — hash satisfies "minimisation" guidance |
 | Outbox (in-flight events) | `event_outbox` (`kc/eventsourcing/outbox.go:124`) | **T2** | None | Drained ≤ a few seconds; cleared on success | SEBI continuity |
-| Consent log | `consent_log` (`kc/audit/consent.go:93`) | **T2** | None | Indefinite (regulatory evidence) | DPDP §6(4) consent + withdrawal trail |
-| Telegram chat ID | `telegram_chat_ids` (`kc/alerts/db.go:90`) | **T2** | None — opt-in, can be cleared by user | Until user disables | DPDP §6 |
-| Price alerts | `alerts` (`kc/alerts/db.go:69`) | **T2** | None | Until user-delete or account-delete | DPDP §6 |
-| Trailing stops | `trailing_stops` (`kc/alerts/db.go:133`) | **T2** | None | Until user-cancel or filled | DPDP §6 |
+| Consent log | `consent_log` (`algo2go/kite-mcp-audit/consent.go:93`) | **T2** | None | Indefinite (regulatory evidence) | DPDP §6(4) consent + withdrawal trail |
+| Telegram chat ID | `telegram_chat_ids` (`algo2go/kite-mcp-alerts/db.go:90`) | **T2** | None — opt-in, can be cleared by user | Until user disables | DPDP §6 |
+| Price alerts | `alerts` (`algo2go/kite-mcp-alerts/db.go:69`) | **T2** | None | Until user-delete or account-delete | DPDP §6 |
+| Trailing stops | `trailing_stops` (`algo2go/kite-mcp-alerts/db.go:133`) | **T2** | None | Until user-cancel or filled | DPDP §6 |
 | Watchlists + items | `watchlists`, `watchlist_items` (`kc/watchlist/db.go:11,21`) | **T2** | None | Until user-delete | DPDP §6 |
-| Daily P&L snapshots | `daily_pnl` (`kc/alerts/db.go:155`) | **T2** | None | Until account-delete | DPDP §6 |
+| Daily P&L snapshots | `daily_pnl` (`algo2go/kite-mcp-alerts/db.go:155`) | **T2** | None | Until account-delete | DPDP §6 |
 | Family invitations | `family_invitations` (`kc/users/invitations.go:39`) | **T2** | None — bcrypt token hash for one-shot acceptance | Until accepted/expired | DPDP §6 |
 | Paper-trading accounts + orders | `paper_accounts`, `paper_orders`, `paper_positions`, `paper_holdings` (`kc/papertrading/store.go`) | **T2** | None — virtual money, not real | Until user-reset or account-delete | DPDP §6 |
 | Billing tier + Stripe webhook events | `billing`, `webhook_events` (`kc/billing/store.go:56,247`) | **T2** | None — Stripe customer ID is reversible to email at Stripe end | 7 years (Indian tax record-keeping) | Tax law — separate from DPDP |
-| Per-user risk limits | `risk_limits` (`kc/riskguard/limits.go:205`) | **T2** | None | Until user-edit or account-delete | DPDP §6 |
-| App registry (plugin manifest) | `app_registry` (`kc/alerts/db.go:167`) | **T3** | None | Restart-survivable until uninstall | — |
-| Server config (non-secret) | `config` (`kc/alerts/db.go:128`) | **T3** | None | Indefinite | — |
-| Idempotency dedup keys | RAM only (`kc/riskguard/dedup.go`) | **T3** | None | 15-minute TTL | — |
+| Per-user risk limits | `risk_limits` (`algo2go/kite-mcp-riskguard/limits.go:205`) | **T2** | None | Until user-edit or account-delete | DPDP §6 |
+| App registry (plugin manifest) | `app_registry` (`algo2go/kite-mcp-alerts/db.go:167`) | **T3** | None | Restart-survivable until uninstall | — |
+| Server config (non-secret) | `config` (`algo2go/kite-mcp-alerts/db.go:128`) | **T3** | None | Indefinite | — |
+| Idempotency dedup keys | RAM only (`algo2go/kite-mcp-riskguard/dedup.go`) | **T3** | None | 15-minute TTL | — |
 | ltpCache, anomaly cache | RAM only | **T3** | None | TTL bounded | — |
 | Tool integrity manifest | RAM only (`mcp/integrity.go`) | **T3** | None | Process lifetime | — |
 | Static instrument list, sector map | embedded `.csv` / `.go` | **T4** | n/a | Compile-time | — |
@@ -53,7 +53,7 @@ Tier assignment uses the **highest classification of any field**, not the averag
 
 ## 4. Cryptographic baseline (T1)
 
-All T1 data shares one envelope: **AES-256-GCM with a per-record 12-byte nonce, key derived from `OAUTH_JWT_SECRET` via HKDF-SHA-256** (label per record type). Implementation: `kc/alerts/crypto.go`. Properties:
+All T1 data shares one envelope: **AES-256-GCM with a per-record 12-byte nonce, key derived from `OAUTH_JWT_SECRET` via HKDF-SHA-256** (label per record type). Implementation: `algo2go/kite-mcp-alerts/crypto.go`. Properties:
 
 - Authenticated encryption — ciphertext tampering is detected at decrypt.
 - Forward-rotation: changing `OAUTH_JWT_SECRET` invalidates every existing T1 record. Operators run a one-shot rotation tool (see `docs/incident-response.md` Scenario 5).
@@ -72,7 +72,7 @@ Disk-level controls (Fly.io volume LUKS, R2 bucket SSE-S3 encryption-at-rest) si
 
 ## 6. DPDP §6 + §8 obligation map
 
-- **§6 consent capture** — recorded in `consent_log` at OAuth-authorize and credential-submit (`kc/audit/consent.go`).
+- **§6 consent capture** — recorded in `consent_log` at OAuth-authorize and credential-submit (`algo2go/kite-mcp-audit/consent.go`).
 - **§6 consent withdrawal** — `delete_my_account` tool zeroises T1 + T2 in a single transaction; consent record is preserved for audit. SLA 7 days.
 - **§8(5) breach notification** — CERT-In within 6 hours, DPB India per Rule 7, affected users via email within 72 hours. See [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §11.
 - **§11 data portability** — `data-export` use case returns the user's T2 footprint as canonical JSON.
@@ -95,4 +95,4 @@ This document is reviewed when:
 - A control changes (e.g. cryptographic library swap, retention default change).
 - A regulator adds a new obligation hook (DPDP rule revisions, SEBI circulars).
 
-Without a triggering change, the document is re-validated annually against the table inventory in `kc/alerts/db.go` and friends.
+Without a triggering change, the document is re-validated annually against the table inventory in `algo2go/kite-mcp-alerts/db.go` and friends.

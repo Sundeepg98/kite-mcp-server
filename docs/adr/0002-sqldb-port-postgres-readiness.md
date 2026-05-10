@@ -8,11 +8,11 @@
 
 ## Context
 
-Auditors evaluating dim-11 (Portability) ask: "Is the system extensible to other DB engines (Postgres, MySQL)?" Today kite-mcp-server runs SQLite via `*alerts.DB` (`kc/alerts/db.go`). Cloudflare R2 + Litestream replication makes the SQLite dependency low-friction at our scale, but the auditor question deserves a structural answer.
+Auditors evaluating dim-11 (Portability) ask: "Is the system extensible to other DB engines (Postgres, MySQL)?" Today kite-mcp-server runs SQLite via `*alerts.DB` (`algo2go/kite-mcp-alerts/db.go`). Cloudflare R2 + Litestream replication makes the SQLite dependency low-friction at our scale, but the auditor question deserves a structural answer.
 
 ## Decision
 
-Define a narrow `kc/alerts.SQLDB` interface (`kc/alerts/db.go:13`) capturing the dialect-portable subset of `*alerts.DB`:
+Define a narrow `kc/alerts.SQLDB` interface (`algo2go/kite-mcp-alerts/db.go:13`) capturing the dialect-portable subset of `*alerts.DB`:
 
 ```go
 type SQLDB interface {
@@ -27,11 +27,11 @@ type SQLDB interface {
 }
 ```
 
-Compile-time assertion: `kc/alerts/db_test.go:39 — var _ SQLDB = (*DB)(nil)`. Plus runtime contract test `TestSQLDB_DBSatisfiesInterface` proving the interface is real, not Go-rules-accidental.
+Compile-time assertion: `algo2go/kite-mcp-alerts/db_test.go:39 — var _ SQLDB = (*DB)(nil)`. Plus runtime contract test `TestSQLDB_DBSatisfiesInterface` proving the interface is real, not Go-rules-accidental.
 
 ## Postgres adapter contract
 
-A future Postgres adapter ships as `kc/alerts/postgres.go` (or `kc/alerts/postgresdb.go`) with one new compile-time assertion:
+A future Postgres adapter ships as `algo2go/kite-mcp-alerts/postgres.go` (or `algo2go/kite-mcp-alerts/postgresdb.go`) with one new compile-time assertion:
 
 ```go
 var _ SQLDB = (*PostgresDB)(nil)
@@ -54,11 +54,11 @@ INSERT INTO config (key, value) VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET value = $2
 ```
 
-These methods stay on `*DB` directly. A `PostgresDB` would have a parallel `GetConfig`/`SetConfig` with Postgres-flavored SQL — same method names, dialect-specific bodies. Callers reach through the concrete type for these (3 callsites in production: `kc/alerts/encryption_salt.go`, `kc/audit/hashpublish_chain.go`, `kc/manager_init.go`). A real Postgres migration would update those 3 callsites to a `ConfigStore` sub-interface or use a runtime dispatch helper.
+These methods stay on `*DB` directly. A `PostgresDB` would have a parallel `GetConfig`/`SetConfig` with Postgres-flavored SQL — same method names, dialect-specific bodies. Callers reach through the concrete type for these (3 callsites in production: `algo2go/kite-mcp-alerts/encryption_salt.go`, `algo2go/kite-mcp-audit/hashpublish_chain.go`, `kc/manager_init.go`). A real Postgres migration would update those 3 callsites to a `ConfigStore` sub-interface or use a runtime dispatch helper.
 
 ## DDL portability
 
-Schema files (`kc/alerts/db.go:68-200`) use SQLite-flavored DDL:
+Schema files (`algo2go/kite-mcp-alerts/db.go:68-200`) use SQLite-flavored DDL:
 - `INTEGER PRIMARY KEY` (SQLite) → `BIGSERIAL PRIMARY KEY` (Postgres)
 - `TEXT` (SQLite, type-flexible) → `VARCHAR(N)` or `TEXT` (Postgres, strict)
 - `TEXT NOT NULL DEFAULT '{}'` for JSON (SQLite) → `JSONB NOT NULL DEFAULT '{}'::jsonb` (Postgres-native)
@@ -79,7 +79,7 @@ Verdict: ship interface readiness (this ADR + `SQLDB` interface in `0a9e78d`); d
 ## Consequences
 
 **Positive**:
-- Auditor question answered: "Yes, port exists at `kc/alerts/db.go:13`."
+- Auditor question answered: "Yes, port exists at `algo2go/kite-mcp-alerts/db.go:13`."
 - Future contributor adding Postgres has a single satisfaction target.
 - Zero ongoing maintenance cost.
 
@@ -87,13 +87,13 @@ Verdict: ship interface readiness (this ADR + `SQLDB` interface in `0a9e78d`); d
 - Score lift capped at +7pt without real adapter.
 
 **Negative**:
-- Schema DDL bit-rot risk: new tables added to `kc/alerts/db.go`'s DDL block use SQLite-flavored syntax; the parallel Postgres DDL would lag. Mitigation: gate new DDL on a comment line documenting Postgres equivalent (e.g. `-- pg: BIGSERIAL PRIMARY KEY`). Not enforced today.
+- Schema DDL bit-rot risk: new tables added to `algo2go/kite-mcp-alerts/db.go`'s DDL block use SQLite-flavored syntax; the parallel Postgres DDL would lag. Mitigation: gate new DDL on a comment line documenting Postgres equivalent (e.g. `-- pg: BIGSERIAL PRIMARY KEY`). Not enforced today.
 
 ## References
 
-- `kc/alerts/db.go:13` — `SQLDB` interface definition (introduced commit `0a9e78d`)
-- `kc/alerts/db_test.go:39` — compile-time satisfaction assertion
-- `kc/alerts/db.go:285-324` — `*DB` methods that satisfy the interface (plus `GetConfig`/`SetConfig` that intentionally don't)
+- `algo2go/kite-mcp-alerts/db.go:13` — `SQLDB` interface definition (introduced commit `0a9e78d`)
+- `algo2go/kite-mcp-alerts/db_test.go:39` — compile-time satisfaction assertion
+- `algo2go/kite-mcp-alerts/db.go:285-324` — `*DB` methods that satisfy the interface (plus `GetConfig`/`SetConfig` that intentionally don't)
 - `etc/litestream.yml` — current SQLite → R2 replication config (alternative high-availability path)
 - `.research/path-to-100-per-class-deep-dive.md` Class 3
 - `.research/path-to-100-business-case.md` (`78c243e`) §6 — Postgres adapter LOC cost

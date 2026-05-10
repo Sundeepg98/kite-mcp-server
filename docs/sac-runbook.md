@@ -2,7 +2,7 @@
 
 ## Symptom
 
-Running `go test ./kc/riskguard/...` (or any Go package) on Windows
+Running `go test ./algo2go/kite-mcp-riskguard/...` (or any Go package) on Windows
 with Smart App Control = On may fail with the test binary being
 silently killed or blocked. Re-running with rotated `GOTMPDIR` /
 `GOCACHE` does not help — SAC reputation is keyed on the binary's
@@ -89,7 +89,7 @@ SAC On. To reduce flake:
 
 ```bash
 # From repo root, in any shell:
-go test -exec="$PWD/scripts/go-test-sac.cmd" ./kc/riskguard/... -count=1
+go test -exec="$PWD/scripts/go-test-sac.cmd" ./algo2go/kite-mcp-riskguard/... -count=1
 ```
 
 ### Option 2 (fastest for hot loops): trusted-CA code-signing cert
@@ -111,7 +111,7 @@ SAC is Windows-only. Run the suite under WSL2 or a Linux container
 when the work is verification-heavy:
 
 ```bash
-wsl -- go test ./kc/riskguard/... -count=1
+wsl -- go test ./algo2go/kite-mcp-riskguard/... -count=1
 ```
 
 ### Constraints (any option)
@@ -156,7 +156,7 @@ launch subprocess: fork/exec ...\plugin.exe:
 ```
 
 **Fix pattern:** sign the spawned binary right after building it,
-before the parent execs it. See `kc/riskguard/subprocess_check_test.go`
+before the parent execs it. See `algo2go/kite-mcp-riskguard/subprocess_check_test.go`
 `signPluginForSAC` for a concrete example used by the
 `buildExamplePlugin` test helper (commit `55b7387`).
 

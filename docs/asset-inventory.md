@@ -62,8 +62,8 @@ Per [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §2:
 | `broker/zerodha/` | Zerodha adapter wrapping `gokiteconnect/v4` | T2 |
 | `broker/mock/` | In-memory mock broker (DEV_MODE + tests) | T3 |
 | `kc/` | Application core: Manager, services, use cases, domain, stores | T2 |
-| `kc/audit/` | Tool-call audit log + middleware + HMAC hash chain | T2 |
-| `kc/alerts/` | Alert store + crypto primitives + briefing service | T1 |
+| `algo2go/kite-mcp-audit/` | Tool-call audit log + middleware + HMAC hash chain | T2 |
+| `algo2go/kite-mcp-alerts/` | Alert store + crypto primitives + briefing service | T1 |
 | `kc/billing/` | Stripe subscription store + middleware | T2 |
 | `kc/cqrs/` | Command/Query types, in-memory bus | T2 |
 | `kc/credstore/` (alias of `kc/credential_store.go`) | Encrypted Kite credentials | T1 |
@@ -74,7 +74,7 @@ Per [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §2:
 | `kc/ops/` | Dashboard/admin HTTP handlers, SSR renderers | T2 |
 | `kc/papertrading/` | Virtual portfolio + middleware | T2 |
 | `kc/registry/` | OAuth client registrations | T1 |
-| `kc/riskguard/` | 8-check financial safety engine + middleware | T2 |
+| `algo2go/kite-mcp-riskguard/` | 8-check financial safety engine + middleware | T2 |
 | `kc/scheduler/` | Cron tasks (briefings, P&L, audit cleanup) | T3 |
 | `kc/templates/` | HTML templates for dashboard + landing pages | T4 (public-facing) |
 | `kc/telegram/` | Bot handler + trading commands | T2 |
@@ -204,7 +204,7 @@ Authoritative inventory: [`data-classification.md`](data-classification.md). Sum
 | T3 (Internal) | 6 classes | `app_registry`, `config`, in-RAM caches | Process lifetime to indefinite |
 | T4 (Public) | 2 classes | embedded CSV/Go data, public docs | Compile-time / repo lifetime |
 
-Total persisted SQLite tables (post-migration at HEAD `3501a11`): ~28. Authoritative table list: `kc/alerts/db.go` migration slice.
+Total persisted SQLite tables (post-migration at HEAD `3501a11`): ~28. Authoritative table list: `algo2go/kite-mcp-alerts/db.go` migration slice.
 
 ---
 

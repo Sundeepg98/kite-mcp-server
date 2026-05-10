@@ -14,7 +14,7 @@
   latency hedge) and Track B (Python analytics, multi-MB payloads)
   have different optimal encodings; the spec must accommodate both
   without forcing a single answer that fits neither well.
-- Backward compatibility with the canonical `kc/riskguard/checkrpc/`
+- Backward compatibility with the canonical `algo2go/kite-mcp-riskguard/checkrpc/`
   pattern (ADR 0007) — no flag-day migration of the existing gob
   consumer.
 
@@ -25,7 +25,7 @@
 ADR 0007 (`docs/adr/0007-canonical-cross-language-plugin-ipc.md`,
 shipped at `202b993`) canonicalized `hashicorp/go-plugin`-via-netRPC
 over stdio as the cross-language plugin IPC contract. Its scope was
-narrow: it ratified the existing `kc/riskguard/checkrpc/` pattern (gob
+narrow: it ratified the existing `algo2go/kite-mcp-riskguard/checkrpc/` pattern (gob
 encoding, single domain) as canonical for new plugin authors.
 
 Since ADR 0007 shipped, three pieces of context have moved:
@@ -63,7 +63,7 @@ beyond the existing `checkrpc/` pattern.
 
 **Adopt JSON-RPC 2.0 over stdio with optional JSON Schema
 descriptors** as the wire format for new cross-language plugin
-domains beyond `kc/riskguard/checkrpc/`. The existing gob-over-netRPC
+domains beyond `algo2go/kite-mcp-riskguard/checkrpc/`. The existing gob-over-netRPC
 path stays in place for the riskguard plugin domain (no flag-day
 migration); new domains use JSON-RPC 2.0.
 
@@ -251,7 +251,7 @@ zero triggers.
   draft this ADR distills
 - `docs/adr/0007-canonical-cross-language-plugin-ipc.md` (`202b993`) —
   canonical pattern this spec extends; remains in force for riskguard
-- `kc/riskguard/checkrpc/types.go` (216 LOC) — existing wire contract
+- `algo2go/kite-mcp-riskguard/checkrpc/types.go` (216 LOC) — existing wire contract
   reference implementation; provides forward/backward-compat test
   pattern that translates to JSON-RPC 2.0
 - `.research/parallel-stack-shift-roadmap.md` (`8361409`) — Foundation

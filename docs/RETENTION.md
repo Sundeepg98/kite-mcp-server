@@ -19,26 +19,26 @@ the policy is enforced in code, not aspirational.
 
 | Data class                | Storage                          | Trigger              | Window           | Code reference |
 |---------------------------|----------------------------------|----------------------|------------------|----------------|
-| Tool-call audit trail     | `tool_calls` (SQLite)            | Daily scheduler      | 5 years (default in prod) | `app/wire.go:824-841`, `kc/audit/retention.go:34-40` |
-| Audit chain break-marker  | `tool_calls` row + `__chain_break` | At delete time | Permanent (1 row per cleanup batch) | `kc/audit/retention.go:31-33` |
-| Encrypted Kite credentials| `kite_credentials`               | Explicit user/admin delete | Until consent withdrawn or account deleted | `kc/credential_store.go:137`, `kc/alerts/db_commands.go:187-188` |
-| Encrypted Kite tokens     | `kite_tokens`                    | Daily Kite expiry detection + explicit delete | ~24 h cycle (~06:00 IST refresh) | `kc/expiry.go:15-23`, `kc/token_store.go:120-130`, `kc/alerts/db_commands.go:155-156` |
-| OAuth client registrations| `oauth_clients` (encrypted secret) | Explicit revoke    | Until client revokes | `oauth/handlers.go` (issued at register) |
+| Tool-call audit trail     | `tool_calls` (SQLite)            | Daily scheduler      | 5 years (default in prod) | `app/wire.go:824-841`, `algo2go/kite-mcp-audit/retention.go:34-40` |
+| Audit chain break-marker  | `tool_calls` row + `__chain_break` | At delete time | Permanent (1 row per cleanup batch) | `algo2go/kite-mcp-audit/retention.go:31-33` |
+| Encrypted Kite credentials| `kite_credentials`               | Explicit user/admin delete | Until consent withdrawn or account deleted | `kc/credential_store.go:137`, `algo2go/kite-mcp-alerts/db_commands.go:187-188` |
+| Encrypted Kite tokens     | `kite_tokens`                    | Daily Kite expiry detection + explicit delete | ~24 h cycle (~06:00 IST refresh) | `kc/expiry.go:15-23`, `kc/token_store.go:120-130`, `algo2go/kite-mcp-alerts/db_commands.go:155-156` |
+| OAuth client registrations| `oauth_clients` (encrypted secret) | Explicit revoke    | Until client revokes | `algo2go/kite-mcp-oauth/handlers.go` (issued at register) |
 | MCP bearer JWT            | Stateless (no DB row)            | Self-expiring claim  | 24 hours         | `oauth/config.go:30-31` |
 | Dashboard SSO JWT (cookie)| Stateless (browser cookie)       | Self-expiring claim  | 7 days           | `oauth/middleware.go:131-144` |
 | Google SSO state cookie   | Browser cookie                   | OAuth handshake end  | 5 minutes        | `oauth/google_sso.go:88` |
 | MCP session registry      | `mcp_sessions` + RAM             | 30-min cleanup tick  | 12 h since last use | `kc/session.go:34-35`, `kc/session.go:375-419`, `kc/session.go:466-486` |
 | Family invitations        | `family_invitations`             | 6-h cleanup tick     | 7 days unless accepted | `kc/usecases/family_usecases.go:168`, `kc/users/invitations.go:163-180`, `app/wire.go:590-612` |
-| Price alerts              | `alerts`                         | Explicit user/admin delete | Until user-delete or account-delete | `kc/alerts/db_commands.go:80-91`, `kc/alerts/store.go:235-256` |
-| Trailing stops, GTT-style | `trailing_stops`                 | Filled / cancelled / explicit delete | Until terminal | `kc/alerts/db.go:133` |
+| Price alerts              | `alerts`                         | Explicit user/admin delete | Until user-delete or account-delete | `algo2go/kite-mcp-alerts/db_commands.go:80-91`, `algo2go/kite-mcp-alerts/store.go:235-256` |
+| Trailing stops, GTT-style | `trailing_stops`                 | Filled / cancelled / explicit delete | Until terminal | `algo2go/kite-mcp-alerts/db.go:133` |
 | Watchlists                | `watchlists`, `watchlist_items`  | Explicit delete      | Until user-delete | `kc/watchlist/db.go` |
-| Daily P&L snapshots       | `daily_pnl`                      | None (append-only)   | Until account-delete | `kc/alerts/briefing.go` (PnL snapshot service) |
+| Daily P&L snapshots       | `daily_pnl`                      | None (append-only)   | Until account-delete | `algo2go/kite-mcp-alerts/briefing.go` (PnL snapshot service) |
 | Paper-trading state       | `paper_*` tables                 | User reset / account-delete | Until reset      | `kc/papertrading/store.go` |
-| Riskguard dedup keys      | RAM-only `Dedup`                 | TTL eviction         | 15 minutes       | `kc/riskguard/dedup.go:10-13` |
-| Anomaly baseline cache    | RAM-only `statsCache`            | TTL + size cap (10K) | 15 minutes / random eviction at cap | `kc/audit/anomaly_cache.go:11-44` |
+| Riskguard dedup keys      | RAM-only `Dedup`                 | TTL eviction         | 15 minutes       | `algo2go/kite-mcp-riskguard/dedup.go:10-13` |
+| Anomaly baseline cache    | RAM-only `statsCache`            | TTL + size cap (10K) | 15 minutes / random eviction at cap | `algo2go/kite-mcp-audit/anomaly_cache.go:11-44` |
 | Per-tool rate-limiter buckets | RAM-only                     | 10-min sweeper       | 10 minutes idle  | `app/ratelimit.go:147,195,205` |
 | Telegram pending-confirm cache | RAM-only                    | 2-min cleanup tick   | 2 minutes        | `kc/telegram/bot.go:171-194` |
-| Consent log               | `consent_log`                    | None (append-only)   | Indefinite (regulatory evidence) | `kc/audit/consent.go` |
+| Consent log               | `consent_log`                    | None (append-only)   | Indefinite (regulatory evidence) | `algo2go/kite-mcp-audit/consent.go` |
 | Domain events             | `domain_events`                  | None (event source-of-truth) | Indefinite (`email_hash` only) | `kc/eventsourcing/store.go` |
 | Litestream replicas (R2)  | Cloudflare R2 bucket             | Litestream retention | 24 h default WAL window | `etc/litestream.yml` |
 
@@ -47,14 +47,14 @@ the policy is enforced in code, not aspirational.
 ### 3.1 Tool-call audit trail
 
 The `tool_calls` table records every MCP tool invocation (params summarised and
-PII-redacted at write time — see `kc/audit/store.go`).
+PII-redacted at write time — see `algo2go/kite-mcp-audit/store.go`).
 
 **Production (`app/wire.go:824-841`):** the in-process scheduler fires
 `DeleteOlderThan(now - 1825d)` daily at **03:00 IST**, retaining **5 years** to
 satisfy SEBI algo-trading audit requirements (the `retentionDays = 1825`
 constant is wired explicitly).
 
-**In-package backstop (`kc/audit/retention.go:34-129`):** when an external
+**In-package backstop (`algo2go/kite-mcp-audit/retention.go:34-129`):** when an external
 scheduler is **not** wired (self-host, dev), `Store.StartRetentionWorker(days)`
 runs `CleanupOldRecords(days)` every 24 h. The default window is
 `DefaultRetentionDays = 90` (DPDP-compliance minimum, line 16). Operators
@@ -64,7 +64,7 @@ external scheduler owns retention to avoid double-deletion).
 
 **Hash-chain integrity:** `DeleteOlderThan` writes a `__chain_break` marker row
 so `VerifyChain` can detect retention boundaries vs. tampering
-(`kc/audit/retention.go:31-33`).
+(`algo2go/kite-mcp-audit/retention.go:31-33`).
 
 ### 3.2 Encrypted Kite credentials (`kite_credentials`)
 
@@ -74,7 +74,7 @@ AES-256-GCM (HKDF-derived from `OAUTH_JWT_SECRET`).
 **Trigger-based only.** No automatic cleanup. Removed when:
 1. User explicitly clears credentials via the dashboard / `kc.Manager` API →
    `KiteCredentialStore.Delete()` (`kc/credential_store.go:137`) →
-   `DB.DeleteCredential(email)` (`kc/alerts/db_commands.go:187-188`).
+   `DB.DeleteCredential(email)` (`algo2go/kite-mcp-alerts/db_commands.go:187-188`).
 2. Admin-driven user deletion (DPDP erasure path; see §4).
 
 There is **no time-based expiry** — credentials remain encrypted at rest until
@@ -174,9 +174,9 @@ Live price alerts the user has configured.
 
 **Trigger-based only.** Removed when:
 - User cancels via tool / dashboard → `DeleteAlert(email, alertID)`
-  (`kc/alerts/db_commands.go:80-87`).
+  (`algo2go/kite-mcp-alerts/db_commands.go:80-87`).
 - User account is wiped → `DeleteAlertsByEmail(email)`
-  (`kc/alerts/db_commands.go:89-94`).
+  (`algo2go/kite-mcp-alerts/db_commands.go:89-94`).
 
 There is no time-based pruning; an alert that has fired is marked
 `status='triggered'` in place and remains queryable as part of the user's
@@ -186,7 +186,7 @@ trading record.
 
 In-RAM idempotency check keying on SHA256(email + client_order_id).
 
-**15-minute TTL.** `kc/riskguard/dedup.go:10-13`:
+**15-minute TTL.** `algo2go/kite-mcp-riskguard/dedup.go:10-13`:
 ```go
 const DefaultDedupTTL = 15 * time.Minute
 ```
@@ -198,7 +198,7 @@ Data: a tiny map; eviction is lazy on `SeenOrAdd`. Never persisted.
 In-RAM cache of per-user 30-day order statistics used by riskguard's
 anomaly check.
 
-**15-minute TTL + 10K entry cap.** `kc/audit/anomaly_cache.go:11-44`:
+**15-minute TTL + 10K entry cap.** `algo2go/kite-mcp-audit/anomaly_cache.go:11-44`:
 ```go
 const DefaultMaxStatsCacheEntries = 10_000
 ```
@@ -234,7 +234,7 @@ Append-only log of every consent grant/withdraw event. PII-minimised: stores
 
 **Indefinite retention** — required as evidence under DPDP §6(4). Withdrawal
 is recorded by INSERTING a `withdraw` row and stamping the matching grant row
-with `withdrawn_at` (`kc/audit/consent.go:265-275`); the grant row itself is
+with `withdrawn_at` (`algo2go/kite-mcp-audit/consent.go:265-275`); the grant row itself is
 **never** deleted.
 
 ### 3.16 Domain events (`domain_events`)
@@ -262,7 +262,7 @@ order:
 
 1. `KiteCredentialStore.Delete(email)` — `kc/credential_store.go:137`
 2. `KiteTokenStore.Delete(email)` — `kc/token_store.go:120-130`
-3. `DB.DeleteAlertsByEmail(email)` — `kc/alerts/db_commands.go:89-94`
+3. `DB.DeleteAlertsByEmail(email)` — `algo2go/kite-mcp-alerts/db_commands.go:89-94`
 4. Watchlists, paper-trading, daily P&L — per-store delete-by-email helpers in
    `kc/watchlist`, `kc/papertrading`, `kc/alerts`.
 5. `mcp_sessions` — `CleanupExpiredSessions()` covers in-flight sessions; an
@@ -313,7 +313,7 @@ WAL file mtime is older than the configured threshold.
 ## 6. Out of Scope
 
 - **PII-redacted log content.** Application logs (stdout / Fly.io tail) contain
-  metadata only — params are summarised by `kc/audit/store.go` before being
+  metadata only — params are summarised by `algo2go/kite-mcp-audit/store.go` before being
   written to the DB or logs. Log retention is governed by the hosting platform
   (Fly.io defaults), not this policy.
 - **Kite session keys.** The Kite-side session lifecycle (request_token →

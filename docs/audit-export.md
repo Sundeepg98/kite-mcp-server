@@ -32,7 +32,7 @@ git update-index --chmod=+x scripts/export-audit.sh   # persist +x in git index
 
 ## PII / Redaction
 
-The audit store already redacts sensitive args (see `sanitizeForLog` in `kc/audit/store.go`). `args_hash` lets you verify identity without revealing content. Never include raw args in compliance disclosure.
+The audit store already redacts sensitive args (see `sanitizeForLog` in `algo2go/kite-mcp-audit/store.go`). `args_hash` lets you verify identity without revealing content. Never include raw args in compliance disclosure.
 
 ## Location of SQLite DB
 

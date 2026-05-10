@@ -24,7 +24,7 @@ Lines 136, 215, 249: Replace hardcoded `zerodha.New(kc.Client)` with broker sele
 ### kc/manager.go (~30 LOC)
 Wire unused `brokerFactory` field (line 32)
 
-### oauth/handlers_oauth.go (~100 LOC)
+### algo2go/kite-mcp-oauth/handlers_oauth.go (~100 LOC)
 Add broker router: Zerodha → Kite login, Upstox → Upstox login (https://api.upstox.com/v2/login/authorization/dialog)
 
 ### MCP Tools (~370 LOC)

@@ -51,7 +51,7 @@ target data they do not own.
 
 Primary defences:
 - Per-user credential isolation — `KiteCredentialStore` keyed by email,
-  AES-256-GCM at rest (`kc/alerts/crypto.go`).
+  AES-256-GCM at rest (`algo2go/kite-mcp-alerts/crypto.go`).
 - Middleware-enforced email-from-JWT scoping — the MCP tool handlers pull the
   authenticated email from `oauth.EmailFromContext(r.Context())` rather than
   from client-supplied parameters.
@@ -85,7 +85,7 @@ the intent of forging audit entries or executing JavaScript inside a widget
 iframe rendered on claude.ai or the dashboard.
 
 Primary defences:
-- Audit log newline sanitisation — `kc/audit/summarize.go:557` `sanitizeForLog`.
+- Audit log newline sanitisation — `algo2go/kite-mcp-audit/summarize.go:557` `sanitizeForLog`.
   Applied inside both `strVal` (tool input args — the main attack surface)
   and `jsonString` (Kite responses — defence-in-depth against round-trip
   poisoning via order tags). Shipped in commit `0b1724d`.
@@ -123,10 +123,10 @@ AES-256-GCM with HKDF-SHA256 key derivation and a per-database random 32-byte
 salt. One master secret (`OAUTH_JWT_SECRET`) is the HKDF input; compromising
 it compromises all encrypted tokens.
 
-- Implementation: `kc/alerts/crypto.go` (`encrypt` / `decrypt` — lines 198
+- Implementation: `algo2go/kite-mcp-alerts/crypto.go` (`encrypt` / `decrypt` — lines 198
   and 230; `DeriveEncryptionKeyWithSalt` — line 38; `EnsureEncryptionSalt` —
   line 59).
-- Wrappers: `kc/alerts/db_commands.go` (token, credential, OAuth client
+- Wrappers: `algo2go/kite-mcp-alerts/db_commands.go` (token, credential, OAuth client
   stores all re-use the same primitives).
 - Encrypted columns:
   - `kite_tokens.access_token` — cached per-user Kite access tokens
@@ -170,14 +170,14 @@ sanitisation, an attacker who names a watchlist
 `"foo\nFAKE LOG: admin_change_role target=victim"` can inject a forged row
 that looks like a real admin action when the activity widget renders it.
 
-- Implementation: `kc/audit/summarize.go:557` `sanitizeForLog` replaces
+- Implementation: `algo2go/kite-mcp-audit/summarize.go:557` `sanitizeForLog` replaces
   `\n`/`\r`/`\t` with their backslash-escape forms.
 - Applied inside:
   - `strVal` — line 543, covers every tool-arg extraction site.
   - `jsonString` — line 419, covers round-trip from Kite responses (order
     tags, user-searched symbols).
 - A single helper covers ~50 summariser call sites without touching each.
-- Tests: `kc/audit/summarize_test.go` —
+- Tests: `algo2go/kite-mcp-audit/summarize_test.go` —
   `TestSummarizeInput_CreateWatchlist_InjectionAttempt` exercises the exact
   attack scenario.
 
@@ -208,13 +208,13 @@ and lets subsequent bytes execute as script.
 fallback fails. Previously both paths were silent — a buffer backlog could
 accumulate undetected, creating a compliance gap.
 
-- Implementation: `kc/audit/store_worker.go`.
+- Implementation: `algo2go/kite-mcp-audit/store_worker.go`.
   - Sync-fallback path (worker not started) logs `Error` on every drop
     (rare — worker is normally running) — lines 63-74.
   - Buffer-full path logs `Warn` every 100 drops with cumulative
     `dropped_total` so noisy backlogs don't spam error logs but ops can still
     chart the trend — lines 76-91.
-- Exposed counter: `Store.DroppedCount()` — `kc/audit/store.go:75`. Surfaced
+- Exposed counter: `Store.DroppedCount()` — `algo2go/kite-mcp-audit/store.go:75`. Surfaced
   via `/healthz?format=json` (see §3.7).
 
 ### 3.6 CQRS registration failure — fail-startup instead of panic
@@ -262,8 +262,8 @@ defaults only, audit buffer dropping) without waiting for user complaints.
 8 checks enforced by middleware before any order tool reaches the Kite API.
 All limits are per-user (DB-backed) with system defaults as fallback.
 
-- Implementation: `kc/riskguard/` — `guard.go`, `middleware.go`.
-- System defaults (`kc/riskguard/guard.go:14`):
+- Implementation: `algo2go/kite-mcp-riskguard/` — `guard.go`, `middleware.go`.
+- System defaults (`algo2go/kite-mcp-riskguard/guard.go:14`):
   - Max single order value: ₹5,00,000
   - Max orders per day: 200
   - Max orders per minute: 10 (rate limit)
@@ -286,9 +286,9 @@ Every MCP tool call is logged to `tool_calls` (SQLite) with an HMAC-SHA256
 chain: `entry_hash = HMAC(hashKey, prev_hash || call_id || email || tool ||
 started_at)`.
 
-- Schema: `kc/audit/store.go:139` `InitTable` — `prev_hash`, `entry_hash`
+- Schema: `algo2go/kite-mcp-audit/store.go:139` `InitTable` — `prev_hash`, `entry_hash`
   columns.
-- Chain computation: `kc/audit/store_worker.go:37` `computeChainLink`.
+- Chain computation: `algo2go/kite-mcp-audit/store_worker.go:37` `computeChainLink`.
 - Domain-separated key: `hashKey = HMAC(OAUTH_JWT_SECRET, "audit-chain-key-v1")`
   — `store.go:103`.
 - Resume after restart: `SeedChain` — `store.go:120`. If no prior entries,
@@ -307,7 +307,7 @@ scheduler task.
   const retentionDays = 1825 // 5 years — SEBI algo trading audit trail requirement
   ```
 - Task name: `audit_cleanup`, scheduled daily at 03:00 IST.
-- Delete path: `kc/audit/store_query.go:234` `DeleteOlderThan` — also writes
+- Delete path: `algo2go/kite-mcp-audit/store_query.go:234` `DeleteOlderThan` — also writes
   a chain-break marker row so verification can detect the deletion window.
 
 ### 3.11 Audit hash-chain external publication — opt-in
@@ -315,7 +315,7 @@ scheduler task.
 External anchor for the chain tip, so an attacker who gains write access to
 the audit DB cannot silently rewrite history.
 
-- Implementation: `kc/audit/hashpublish.go`.
+- Implementation: `algo2go/kite-mcp-audit/hashpublish.go`.
 - Uploads `HashTipPublication{ tip_hash, entry_count, timestamp, signature }`
   to an S3-compatible bucket every hour (configurable).
 - Signature: HMAC-SHA256 over the payload, default key is
@@ -330,7 +330,7 @@ the audit DB cannot silently rewrite history.
 
 All MCP authentication uses PKCE (S256) via `mcp-remote` → server.
 
-- Implementation: `oauth/handlers.go`, `oauth/handlers_oauth.go`.
+- Implementation: `algo2go/kite-mcp-oauth/handlers.go`, `algo2go/kite-mcp-oauth/handlers_oauth.go`.
 - Dynamic client registration — clients are scoped per-user.
 - Kite itself handles password + TOTP (2FA) authentication; the server never
   sees user passwords.
@@ -369,7 +369,7 @@ Referenced in `SECURITY.md:74` and implemented in the HTTP middleware stack.
 
 ### 3.16 Sensitive parameter redaction in audit
 
-`kc/audit/sanitize.go:7` `sensitiveKeys` lists parameters that are replaced
+`algo2go/kite-mcp-audit/sanitize.go:7` `sensitiveKeys` lists parameters that are replaced
 with `<redacted>` before the summary is rendered: `access_token`, `api_key`,
 `api_secret`, `password`, `secret`, `token`. Case-insensitive match.
 
@@ -444,7 +444,7 @@ and not externally anchored. An attacker with DB write access who recomputes
 the entire chain leaves no independent evidence.
 
 - To enable: set the four `AUDIT_HASH_PUBLISH_*` env vars (see
-  `kc/audit/hashpublish.go:82`).
+  `algo2go/kite-mcp-audit/hashpublish.go:82`).
 - Operator action required for each new deployment.
 
 ### 4.2 Secret rotation runbook
@@ -454,7 +454,7 @@ No documented SOP for rotating `OAUTH_JWT_SECRET` or
 
 Impact of an ad-hoc rotation today:
 - All encrypted credentials must be re-encrypted with the new HKDF-derived
-  key (the re-encryption loop exists in `kc/alerts/crypto.go:106`
+  key (the re-encryption loop exists in `algo2go/kite-mcp-alerts/crypto.go:106`
   `migrateEncryptedData` but is only wired to the first-run salt migration).
 - All dashboard session cookies (7-day expiry) become invalid.
 - All MCP bearer tokens (24-hour expiry) become invalid.

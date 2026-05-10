@@ -102,15 +102,15 @@ Pulled directly from [`pre-deploy-checklist.md`](pre-deploy-checklist.md):
 - [ ] Disclaimer / draft banners still visible on `TERMS.md`, `PRIVACY.md`
 - [ ] "Built on Zerodha's open-source Kite MCP Server (MIT)" still in landing.html footer
 - [ ] Any new Telegram outbound message uses `sendFinancialHTML` (disclaimer-prefixed)
-- [ ] Audit trail still enabled (`kc/audit/` not broken)
+- [ ] Audit trail still enabled (`algo2go/kite-mcp-audit/` not broken)
 
 ### 3.3 Pull request review (when applicable)
 
 Single-maintainer projects skip formal PR review for routine commits. PR review IS required when:
 
 1. **External contributor.** Anyone other than `Sundeepg98` opens a PR — full review per `CODEOWNERS`.
-2. **Security-sensitive change.** Any change to `oauth/`, `kc/audit/`, `kc/credstore/`, `kc/riskguard/`, encryption code, or a new external integration.
-3. **Schema migration.** Any `kc/alerts/db.go` migration that touches an existing table — peer review required for backward-compatibility check.
+2. **Security-sensitive change.** Any change to `oauth/`, `algo2go/kite-mcp-audit/`, `kc/credstore/`, `algo2go/kite-mcp-riskguard/`, encryption code, or a new external integration.
+3. **Schema migration.** Any `algo2go/kite-mcp-alerts/db.go` migration that touches an existing table — peer review required for backward-compatibility check.
 4. **Public API surface.** Changes to MCP tool descriptions, OAuth metadata, dashboard URLs (clients may have hardcoded these).
 
 Review uses the `code-review` plugin (see `.claude/plugins/`) to surface common issues automatically before human review.
@@ -185,7 +185,7 @@ Fly.io's deployer:
 Deploy fails fast if:
 - Container build fails (Go compile error, missing system dep).
 - Healthcheck (`/healthz`) returns non-2xx within startup window (default 30s).
-- Migration crashes the binary on first request (we use `kc/alerts/db.go` migrations; failure logs and exits).
+- Migration crashes the binary on first request (we use `algo2go/kite-mcp-alerts/db.go` migrations; failure logs and exits).
 
 ---
 
@@ -278,9 +278,9 @@ Schema changes are the highest-stakes change category. Every migration must:
 
 1. **Be additive first.** New tables, new columns (nullable / with default). Never drop a column in the same release that adds its replacement — wait one full release cycle.
 2. **Be idempotent.** Migrations run on every server boot; running twice must be a no-op (`CREATE TABLE IF NOT EXISTS`, etc.).
-3. **Be ordered.** Migrations live in `kc/alerts/db.go` `migrations` slice. New migrations append; never reorder existing ones.
+3. **Be ordered.** Migrations live in `algo2go/kite-mcp-alerts/db.go` `migrations` slice. New migrations append; never reorder existing ones.
 4. **Preserve hash chain integrity** if touching `tool_calls`. The chain spans schema versions — adding columns is safe; modifying existing columns risks chain divergence.
-5. **Be tested against a non-empty fixture.** `kc/alerts/db_test.go` has fixture loaders; new migrations need a test case demonstrating the migration on existing data.
+5. **Be tested against a non-empty fixture.** `algo2go/kite-mcp-alerts/db_test.go` has fixture loaders; new migrations need a test case demonstrating the migration on existing data.
 
 Backward-compatibility horizon: ONE release. The Fly.io deploy is a rolling deploy — for ~30 seconds during a release, requests can hit either the old or new binary. Schema must be readable by both.
 

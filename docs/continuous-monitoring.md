@@ -161,7 +161,7 @@ Common fields preserved across the request:
 - `tool` — MCP tool name.
 - `call_id` — per-tool-call UUID set by Correlation middleware.
 
-PII redaction at log time: `kc/audit/sanitize.go` `sensitiveKeys` substitutes `<redacted>` for `access_token`, `api_key`, `api_secret`, `password`, `secret`, `token` (case-insensitive). Audit summariser strips control characters.
+PII redaction at log time: `algo2go/kite-mcp-audit/sanitize.go` `sensitiveKeys` substitutes `<redacted>` for `access_token`, `api_key`, `api_secret`, `password`, `secret`, `token` (case-insensitive). Audit summariser strips control characters.
 
 ### 4.3 Audit trail (parallel persistence)
 
@@ -224,7 +224,7 @@ Per NIST CSF 2.0, continuous monitoring requires automated, not just on-demand, 
 |---|---|---|
 | **Synthetic probe** (DE.CM-1) | Manual / external | `curl -s /healthz?format=json` from operator's monitor; can be wired to UptimeRobot / Better Uptime. Deferred to external uptime monitor. |
 | **Vulnerability scans** (DE.CM-8) | Continuous | Weekly cron in `.github/workflows/security-scan.yml` |
-| **Anomaly detection** (DE.AE-2) | Continuous (in-process) | `kc/audit/anomaly.go` rolling μ+3σ baseline per user |
+| **Anomaly detection** (DE.AE-2) | Continuous (in-process) | `algo2go/kite-mcp-audit/anomaly.go` rolling μ+3σ baseline per user |
 | **Personnel activity** (DE.CM-3) | Continuous (in-process) | Audit trail every tool call |
 | **Configuration drift** (PR.IP-1) | On-demand | `server_version` MCP tool; `/healthz` `version` field |
 | **Boundary monitoring** (DE.CM-1) | Per-IP rate limit | `app/ratelimit.go`; blocked requests visible in logs |
