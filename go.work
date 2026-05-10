@@ -6,11 +6,11 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (22 modules — see `use` block below; arc was 30 -> 29 (sectors
+// Members (21 modules — see `use` block below; arc was 30 -> 29 (sectors
 // added by audit agent) -> 28 (broker + money removed by first Phase B)
 // -> 27 (decorators removed) -> 26 (i18n removed) -> 25 (legaldocs
 // removed) -> 23 (isttz + scheduler dual-removed) -> 22 (logger
-// removed by this commit's Phase B):
+// removed) -> 21 (templates removed by this commit's Phase B):
 //
 // The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
 // broker + kc/audit + kc/riskguard + kc/billing. Established the
@@ -19,18 +19,20 @@
 // broker (commit 6626812), kc/money (commit b92173b), kc/decorators
 // (commit 7f71ccf), kc/i18n (commit c25e37f), kc/legaldocs (commit
 // 568895e), kc/isttz (commit bbb31da — Path A.6.1 foundation),
-// kc/scheduler (commit b2315cd — Path A.6.2 dependent), and
-// kc/logger (commit e6231a9 — Path A.7) to external algo2go GitHub
-// repos. Phase B canary deletions removed broker + kc/money (commit
-// bef0b31), kc/decorators (commit c19bca9), kc/i18n (commit 84aab63),
-// kc/legaldocs (commit 326c045), kc/isttz + kc/scheduler (commit
-// b72a7e9 — combined dual delete), and kc/logger (this commit) from
-// the use block — they are now fetched from
+// kc/scheduler (commit b2315cd — Path A.6.2 dependent), kc/logger
+// (commit e6231a9 — Path A.7), and kc/templates (commit 1db565a —
+// Path A.8' after Path A.8 kc/billing halt at 71f17eb) to external
+// algo2go GitHub repos. Phase B canary deletions removed broker +
+// kc/money (commit bef0b31), kc/decorators (commit c19bca9), kc/i18n
+// (commit 84aab63), kc/legaldocs (commit 326c045), kc/isttz +
+// kc/scheduler (commit b72a7e9 — combined dual delete), kc/logger
+// (commit 1d977b7), and kc/templates (this commit) from the use
+// block — they are now fetched from
 // algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
 // algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0 +
 // algo2go/kite-mcp-legaldocs@v0.1.0 + algo2go/kite-mcp-isttz@v0.1.0 +
-// algo2go/kite-mcp-scheduler@v0.1.0 + algo2go/kite-mcp-logger@v0.1.0
-// via GOPROXY.
+// algo2go/kite-mcp-scheduler@v0.1.0 + algo2go/kite-mcp-logger@v0.1.0 +
+// algo2go/kite-mcp-templates@v0.1.0 via GOPROXY.
 //
 // Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
 // roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
@@ -88,7 +90,6 @@ use (
 	./kc/riskguard
 	./kc/sectors
 	./kc/telegram
-	./kc/templates
 	./kc/ticker
 	./kc/usecases
 	./kc/users

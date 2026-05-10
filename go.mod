@@ -11,6 +11,7 @@ require (
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
+	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0
@@ -33,7 +34,6 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/sectors v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
@@ -62,15 +62,19 @@ require (
 // (commit b92173b), kc/decorators (commit 7f71ccf), kc/i18n (commit
 // c25e37f), kc/legaldocs (commit 568895e), kc/isttz (commit bbb31da
 // — Path A.6.1 foundation), kc/scheduler (commit b2315cd —
-// Path A.6.2 dependent), and kc/logger (commit e6231a9 — Path A.7)
-// to algo2go GitHub repos. Phase B canary deletions (broker+money @
-// commit bef0b31, decorators @ commit c19bca9, i18n @ commit 84aab63,
-// legaldocs @ commit 326c045, isttz+scheduler @ commit b72a7e9, and
-// kc/logger @ this commit) drop their replace directives — all eight
-// are now fetched from algo2go/kite-mcp-broker@v0.1.0 +
-// algo2go/kite-mcp-money@v0.1.0 + algo2go/kite-mcp-decorators@v0.1.0
-// + algo2go/kite-mcp-i18n@v0.1.0 + algo2go/kite-mcp-legaldocs@v0.1.0
-// + algo2go/kite-mcp-isttz@v0.1.0 + algo2go/kite-mcp-scheduler@v0.1.0
+// Path A.6.2 dependent), kc/logger (commit e6231a9 — Path A.7), and
+// kc/templates (commit 1db565a — Path A.8' after Path A.8 kc/billing
+// halt at 71f17eb on deep-cluster cliff) to algo2go GitHub repos.
+// Phase B canary deletions (broker+money @ commit bef0b31, decorators
+// @ commit c19bca9, i18n @ commit 84aab63, legaldocs @ commit
+// 326c045, isttz+scheduler @ commit b72a7e9, kc/logger @ commit
+// 1d977b7, and kc/templates @ this commit) drop their replace
+// directives — all nine are now fetched from
+// algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
+// algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0
+// + algo2go/kite-mcp-legaldocs@v0.1.0 + algo2go/kite-mcp-isttz@v0.1.0
+// + algo2go/kite-mcp-scheduler@v0.1.0 + algo2go/kite-mcp-logger@v0.1.0
+// + algo2go/kite-mcp-templates@v0.1.0 via GOPROXY.
 // + algo2go/kite-mcp-logger@v0.1.0 via GOPROXY.
 // via GOPROXY. The require lines at the top of this go.mod are the
 // operative source for those modules.
@@ -89,7 +93,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
-	github.com/algo2go/kite-mcp-templates => ./kc/templates
 	github.com/zerodha/kite-mcp-server/kc/ticker => ./kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ./kc/usecases
 	github.com/zerodha/kite-mcp-server/kc/users => ./kc/users

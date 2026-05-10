@@ -89,7 +89,6 @@ replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
-	github.com/algo2go/kite-mcp-templates => ../templates
 	github.com/zerodha/kite-mcp-server/kc/users => ../users
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
