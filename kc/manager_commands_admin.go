@@ -6,9 +6,12 @@ import (
 	"log/slog"
 	"reflect"
 
+	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
+	"github.com/algo2go/kite-mcp-eventsourcing"
+	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/algo2go/kite-mcp-riskguard"
 	"github.com/algo2go/kite-mcp-usecases"
 	"github.com/algo2go/kite-mcp-users"
@@ -245,63 +248,95 @@ func (m *Manager) registerAdminRiskCommands() error {
 // usecases.InstrumentResolver. It lives alongside the batch-C handler so
 // the handler stays self-contained; the mcp layer has its own adapter of
 // the same shape that is retained for mcp-internal use.
+//
+// Tier 2.3 slice 3/6: the adapter now reads from a closure-captured
+// instruments getter rather than a *Manager back-pointer, so the
+// Alerts registrar can be tested without a full Manager fixture.
 type adminBatchInstrumentResolver struct {
-	m *Manager
+	getInstruments func() *instruments.Manager
 }
 
 func (r *adminBatchInstrumentResolver) GetInstrumentToken(exchange, tradingsymbol string) (uint32, error) {
-	if r.m == nil || r.m.Instruments == nil {
+	if r.getInstruments == nil {
 		return 0, fmt.Errorf("cqrs: instruments manager not configured")
 	}
-	inst, err := r.m.Instruments.GetByTradingsymbol(exchange, tradingsymbol)
+	im := r.getInstruments()
+	if im == nil {
+		return 0, fmt.Errorf("cqrs: instruments manager not configured")
+	}
+	inst, err := im.GetByTradingsymbol(exchange, tradingsymbol)
 	if err != nil {
 		return 0, err
 	}
 	return inst.InstrumentToken, nil
 }
 
-func (m *Manager) registerAlertCommands() error {
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CreateAlertCommand](), func(ctx context.Context, msg any) (any, error) {
+// AdminAlertsRegistrarDeps holds the dependencies for the alert-lifecycle
+// admin commands (create/delete/composite/setup-telegram; 4 commands).
+// All deps default to closure-getters per the Tier 2.2 lesson.
+type AdminAlertsRegistrarDeps struct {
+	AlertStore         *alerts.Store
+	InstrumentsGetter  func() *instruments.Manager      // for adminBatchInstrumentResolver
+	DispatcherGetter   func() *domain.EventDispatcher
+	EventStoreGetter   func() *eventsourcing.EventStore
+}
+
+// registerAdminAlertsCommandsOnBus is the package-level pure-function
+// registrar for alert-lifecycle admin commands.
+func registerAdminAlertsCommandsOnBus(
+	bus *cqrs.InMemoryBus,
+	deps AdminAlertsRegistrarDeps,
+	logger *slog.Logger,
+) error {
+	if err := bus.Register(reflect.TypeFor[cqrs.CreateAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CreateAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.alertStore == nil {
+		if deps.AlertStore == nil {
 			return nil, fmt.Errorf("cqrs: alert store not configured")
 		}
 		uc := usecases.NewCreateAlertUseCase(
-			m.alertStore,
-			&adminBatchInstrumentResolver{m: m},
-			m.Logger,
+			deps.AlertStore,
+			&adminBatchInstrumentResolver{getInstruments: deps.InstrumentsGetter},
+			logger,
 		)
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		// Phase C ES: audit-log appender so alert.created lands in domain_events
 		// without going through dispatcher→persister (prevents double-emit).
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteAlertCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.DeleteAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.alertStore == nil {
+		if deps.AlertStore == nil {
 			return nil, fmt.Errorf("cqrs: alert store not configured")
 		}
-		uc := usecases.NewDeleteAlertUseCase(m.alertStore, m.Logger)
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		uc := usecases.NewDeleteAlertUseCase(deps.AlertStore, logger)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		// Phase C ES: audit-log appender owns alert.deleted persistence.
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
@@ -311,48 +346,63 @@ func (m *Manager) registerAlertCommands() error {
 	// CreateCompositeAlertCommand — composite alert persistence wired per
 	// the Option B design (shared alerts table with alert_type='composite').
 	// Shares the same instrument resolver as single alerts.
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CreateCompositeAlertCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.CreateCompositeAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CreateCompositeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.alertStore == nil {
+		if deps.AlertStore == nil {
 			return nil, fmt.Errorf("cqrs: alert store not configured")
 		}
 		uc := usecases.NewCreateCompositeAlertUseCase(
-			m.alertStore,
-			&adminBatchInstrumentResolver{m: m},
-			m.Logger,
+			deps.AlertStore,
+			&adminBatchInstrumentResolver{getInstruments: deps.InstrumentsGetter},
+			logger,
 		)
 		// Phase C-Audit: composite alert.created event.
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SetupTelegramCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.SetupTelegramCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SetupTelegramCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.alertStore == nil {
+		if deps.AlertStore == nil {
 			return nil, fmt.Errorf("cqrs: telegram (alert) store not configured")
 		}
-		uc := usecases.NewSetupTelegramUseCase(m.alertStore, m.Logger)
+		uc := usecases.NewSetupTelegramUseCase(deps.AlertStore, logger)
 		// ES: typed TelegramSubscribed/ChatBound dispatch for runtime
 		// subscribers (projector etc.). Pattern mirrors watchlist
 		// command-bus wiring (commit aeb3e8c).
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 	return nil
+}
+
+// registerAlertCommands delegates to the package-level pure-function
+// registrar (Tier 2.3 slice 3/6).
+func (m *Manager) registerAlertCommands() error {
+	return registerAdminAlertsCommandsOnBus(m.commandBus, AdminAlertsRegistrarDeps{
+		AlertStore:        m.alertStore,
+		InstrumentsGetter: func() *instruments.Manager { return m.Instruments },
+		DispatcherGetter:  m.eventing.Dispatcher,
+		EventStoreGetter:  m.eventing.Store,
+	}, m.Logger)
 }
 
 // --- Mutual Funds: place / cancel order + SIP ------------------------------
