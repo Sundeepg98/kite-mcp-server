@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-10
 **Master HEAD**: `bc5043e` (`docs(launch-playbooks): per-item execution playbooks for #42-46 cluster`)
-**Production**: v1.3.0 / tools=111 (Fly.io BOM region; uptime measured 9-10min at audit-time)
+**Production**: v1.3.0 / tools=111 (Fly.io BOM region; machine version 273, image `deployment-01KR9FPJC88YA80VWS7VMTWTY7`, deployed 2026-05-10 17:44 UTC against commit `bc5043e`)
 **Charter**: this is THE doc the orchestrator reads first. Everything else in `.research/` is supporting reference; archive is historical.
 
 ---
@@ -20,7 +20,7 @@
 
 1. **Phase 2.6 architecturally CLOSED.** libSQL/Turso adapter shipped (commits `d3c2a4a` + `5f8ee3b` + `2919f6e`). `ProvideAlertDB` factory accepts `Driver=sqlite|postgres|turso` via env switch. Production stays on SQLite default (`Driver` env unset). Authoritative doc: `phase-2-6-r10-decisions.md` (v8). All Phase 2.0-2.5 design docs archived.
 
-2. **Production is 19 tools / ~550 commits stale of master.** Master HEAD `bc5043e` has tools=130 in-tree; production is v1.3.0/tools=111. **Closing this gap is the #1 highest-leverage move**, identified in `forward-tracks-strategic-review.md`. The blockers are administrative (flyctl reauth via Playwright, ~30 min), not technical.
+2. **Production is at master HEAD modulo `.research/`-only commits.** Production runs image `deployment-01KR9FPJC88YA80VWS7VMTWTY7` built from commit `bc5043e`; current master `21d5684` is 1-2 commits ahead but those commits are `.research/`-only (excluded from Docker build context). **No deploy needed.** Tool count: production reports `tools=111`; master-built binary registers `total_available=111` (verified by chain agent compiling + running locally — see `production-master-gap-report.md`). The earlier "19 tools / ~550 commits stale" framing was a measurement artefact: a `grep mcp.NewTool(` over `mcp/` returned 130 because it included 19 test-fixture calls in `*_test.go` files; filtering with `grep -v _test.go` yields 111. **No gap exists.**
 
 3. **Show HN launch is the gating distribution event.** `launch-path-execution-playbooks.md` provides per-item execution recipes for #43 (R2 dr-drill), #44 (Demo GIF), #42 (Algo2Go TM filing), #45 (Reddit warmup), #46 (Show HN submit). End-to-end calendar: 7-9 days from production-deploy. **Hard prerequisite: production deploy must happen FIRST.**
 
@@ -39,9 +39,9 @@
 | **Recent cadence** | 585 commits last 2 weeks; 931 commits in April 2026 alone | `git log --since` |
 | **Production deploy count** | ~84 consecutive (per dispatch metadata; empirically verifiable via `flyctl releases list`) | `flyctl` (auth-gated) |
 | **Total tests** | ~9,000 across ~437 test files | per `final-pre-launch-verification.md` |
-| **MCP tools (in-tree)** | **130** | `grep -rE 'mcp\.NewTool\("' mcp/` |
-| **MCP tools (production)** | **111** | `curl /healthz` |
-| **Tool count delta** | +19 tools in master not yet deployed | comparison |
+| **MCP tools (production-registered)** | **111** | `curl /healthz` AND chain-agent's local `go build` + run: startup log says `registered=93 gated_trading=18 total_available=111` |
+| **MCP tools (master-built binary)** | **111** | identical to production — verified by compiling current master HEAD locally (per `production-master-gap-report.md` §1.4) |
+| **Tool count delta** | **0** — no gap exists | the prior "+19 in-tree tools not deployed" claim was a grep error: `grep -rE 'mcp\.NewTool\("' mcp/` includes 19 calls in `_test.go` fixture files. **Footnote for future synthesis**: when counting tools, MUST filter `--include='*.go' \| grep -v _test.go` OR (preferred) compile-and-run the binary to read the `total_available=N` startup log line. Pure grep over `mcp/` over-counts by ~19 test-fixture lines. |
 
 ### 1.2 Tier 1 + Tier 2 in-tree refactor state
 
@@ -87,17 +87,23 @@ Per active `path-e-try-before-buy-results.md`:
 
 ## §2 — Distribution + launch state
 
-### 2.1 Production deploy gap (THE blocker)
+### 2.1 Production deploy state (NO gap — corrected 2026-05-11)
 
-| Field | Master HEAD | Production | Gap |
+**Empirical truth** (per chain agent's investigation at `.research/production-master-gap-report.md`, commit `21d5684`):
+
+| Field | Master HEAD | Production | Status |
 |---|---|---|---|
-| Version | (untagged, post v1.3.0) | v1.3.0 | ~commits behind |
-| Tools | 130 | 111 | +19 not deployed |
-| Tests | ~9,000 | (snapshot at v1.3.0 deploy) | sprint-deltas not deployed |
-| Commits behind | n/a | ~550+ | mostly Tier 1+2 + Phase 2.x decomposition + cleanup chains |
+| Deploy commit | (production runs `bc5043e`) | `bc5043e` (verified via image hash `629a6ee5…` = `deployment-01KR9FPJC88YA80VWS7VMTWTY7`) | **production matches deploy commit** |
+| Master HEAD ↔ deployed-image distance | 1-2 commits ahead | n/a | **all `.research/`-only** (excluded from Docker build context) |
+| Source-code mutations between deployed commit and current HEAD | **0** | n/a | bit-equivalent build |
+| Version | v1.3.0 (the binary's hardcoded version literal) | v1.3.0 | matches |
+| Tools (production-registered) | 111 | 111 | **matches** |
+| Tools (master-built binary, verified by chain agent) | 111 | 111 | **matches** |
+| Machine version on Fly | n/a | 273 | matches dispatch chain v273 reports |
 
-**Cause**: flyctl auth expires periodically; user has not run `flyctl deploy -a kite-mcp-server` since v1.3.0 cut.
-**Mitigation**: re-auth via Playwright per `MEMORY.md` ("flyctl PATH issue — use full path; re-login via Playwright browser automation"). Then `flyctl deploy --remote-only`. ~30 min total.
+**Conclusion**: there is no deploy backlog. Earlier sections of STATE.md and `forward-tracks-strategic-review.md` claimed "production is 19 tools / ~550 commits stale" — that claim originated in a grep that included `_test.go` fixtures (130 raw matches; 19 in test files; 111 production-registered). The chain agent compiled the current master HEAD locally and the binary registers exactly `total_available=111` — identical to production. **The dispatch-chain metadata (v228 → v274) was tracking real deploys correctly; only STATE.md's source-counting was wrong.**
+
+**No `flyctl deploy` needed.** A doc-only deploy of the `.research/`-cleanup commits would produce a bit-equivalent image (cf. v263–v272 doc-only sub-arc that all shared image sha256). flyctl auth was working at investigation time; the prior "flyctl reauth via Playwright, ~30 min" framing in `launch-path-execution-playbooks.md` may be conservative or out-of-date.
 
 ### 2.2 Show HN launch readiness
 
@@ -211,10 +217,16 @@ Per active `launch-path-execution-playbooks.md`:
 - SEBI Cloud Framework Circular SEBI/HO/ITD/ITD_VAPT/P/CIR/2023/033 (March 6, 2023): REs narrow definition; algo vendors are AGENTS not REs per Dec 2024 framework
 **Implication**: our Path 2 hosted (read-only) + self-host trading architecture stays in safe-harbor below 50 paid subs. Above 50 paid subs: NSE empanelment + DPDP Data Fiduciary registration.
 
-### 5.6 Production deploy gap (since 2026-05-03)
+### 5.6 Source-counting methodology — compile-and-run > grep-and-count (2026-05-11)
 
-**Finding** (per `final-pre-launch-verification.md` + verified live 2026-05-10): production is v1.3.0/tools=111 against master HEAD's tools=130. ~550 commits behind. **Same finding has held across 7+ days of new dispatches.** Master keeps moving; production keeps standing still.
-**Implication**: every strategic recommendation that depends on "what production looks like" is operating against a 7-day-stale baseline. **Closing this gap unblocks the next 6 months of strategic direction.**
+**Finding** (per chain agent's `production-master-gap-report.md`, commit `21d5684`): a naive `grep -rE 'mcp\.NewTool\("' mcp/ --include='*.go'` over-counts the registered tool count by exactly 19 because 19 of the matches are inside `_test.go` files (test fixtures, not production-registered). The correct empirical methodology is one of:
+
+1. **Compile-and-run** the binary and read the `Tool registration complete registered=N excluded=N gated_trading=N total_available=N` startup log line. This is the source-of-truth — `/healthz` returns the same `total_available` count via `len(mcp.GetAllTools())` at `app/http.go:619`.
+2. **Filter the grep**: `grep -rE 'mcp\.NewTool\("' mcp/ --include='*.go' | grep -v _test.go`. Acceptable as a quick check but not authoritative.
+
+**Implication beyond tool count**: any "in-tree count" claim derived from `grep` over `*.go` files in mixed code+test directories is suspect. **Future synthesis MUST footnote the counting method** when reporting any code-grep number. The flawed STATE.md "tools=130 in-tree" claim caused 4 consecutive synthesis dispatches to recommend "production deploy is the #1 unblock" against a non-existent gap. Cost: ~6 hours of misdirected research synthesis. The lesson is durable — applies to any grep-derived metric (test counts, tool counts, riskguard checks, etc.).
+
+**The earlier "production deploy gap is THE blocker" finding (held in this slot through 2026-05-03 → 2026-05-10) is FALSIFIED.** No gap existed. The dispatch-chain reports of v228 → v274 deploys were real; production bit-equivalent to master HEAD modulo `.research/`-only commits.
 
 ---
 
@@ -316,12 +328,35 @@ One-off investigations + diagnostic findings + retired plans.
 
 ## §8 — Conflicts surfaced + resolutions
 
-### 8.1 "v272 LIVE / 84th deploy" vs empirical "v1.3.0 / tools=111"
+### 8.1 "v272 LIVE / 84th deploy" vs empirical "v1.3.0 / tools=111" — REVISED 2026-05-11
 
-**Source of conflict**: dispatch metadata across 3+ recent dispatches claims v272 / 84th deploy / tools=130 in production.
-**Empirical reality**: `curl https://kite-mcp-server.fly.dev/healthz` returns `{"status":"ok","tools":111,"uptime":"9m32s","version":"v1.3.0"}` (verified 2026-05-10).
-**Resolution**: **empirical reality wins**. Production is stale. Dispatch metadata appears to confuse "in-tree state at master HEAD" (which is tools=130) with "deployed state on Fly.io" (which is tools=111). STATE.md, the playbooks, and the strategic review use empirical numbers.
-**Action**: production deploy is recommendation #1 in `forward-tracks-strategic-review.md`.
+**Original framing (now corrected)**: dispatch metadata across 3+ dispatches claimed v272 / 84th deploy / tools=130 in production. STATE.md initially read this as "dispatch metadata wrong; production is stale."
+
+**Corrected framing** (per chain agent's `production-master-gap-report.md`, commit `21d5684`):
+- The dispatch-chain metadata was **CORRECT all along**. v228 → v274 deploys really happened; `flyctl status` confirms machine version 273, image hash `629a6ee5…`, deployed 2026-05-10 17:44 UTC against commit `bc5043e`.
+- The binary's hardcoded `version` field is `v1.3.0` (a literal in source). It does NOT auto-bump on deploy. So `/healthz` reporting `version=v1.3.0` does NOT mean the binary is from the v1.3.0 deploy era — the v1.3.0 string is just the binary's internal version constant which has not been incremented in source.
+- Production tools=111 = master-built tools=111. No gap.
+
+**Resolution**: STATE.md's earlier "production is stale" framing was wrong because it conflated (a) the `version` field literal in `/healthz` (which doesn't change deploy-to-deploy) with (b) actual deploy state (which v228 → v274 dispatch metadata correctly tracked).
+
+**Updated action**: no deploy needed. The "production deploy is recommendation #1" call in `forward-tracks-strategic-review.md` is FALSIFIED. Surface this back to the strategic-review doc + playbook in next synthesis pass.
+
+### 8.6 "tools=130 in-tree" vs empirical "tools=111 in master-built binary" — NEW 2026-05-11
+
+**Source of conflict**: STATE.md §1.1 (initial commit `1e80930`) claimed `MCP tools (in-tree): 130` based on `grep -rE 'mcp\.NewTool\("' mcp/` returning 130 hits. The same grep was used as a foundational "production-master gap" indicator across 4 synthesis dispatches.
+
+**Empirical reality** (per chain agent at HEAD `21d5684`):
+- `grep -rE 'mcp\.NewTool\("' mcp/ --include='*.go'` → 130 hits (raw)
+- `grep -rE 'mcp\.NewTool\("' mcp/ --include='*.go' | grep -v _test.go` → 111 hits (production-registered)
+- `grep -rE 'mcp\.NewTool\("' mcp/ --include='*_test.go' | wc -l` → 19 hits (test fixtures)
+- 111 + 19 = 130 (the raw grep figure)
+- Compile current master HEAD: `go build -o /tmp/kmcp-test . && /tmp/kmcp-test` → startup log: `Tool registration complete registered=93 excluded=0 gated_trading=18 trading_enabled=false total_available=111`
+
+**Resolution**: **compile-and-run > grep-and-count.** The grep was counting test-fixture `mcp.NewTool(...)` calls inside `_test.go` files which are never registered in production. The 19-test-fixture count happened to exactly match the apparent "tool gap" (130 - 111 = 19) — pure coincidence.
+
+**Methodology fix**: the Source verification §11 of this doc now mandates compile-and-run as the authoritative tool-count method. Pure grep is documented as over-counting. Future agents must footnote the counting method.
+
+**Cost of the error**: ~6 hours of synthesis dispatches recommending "production deploy is the #1 unblock" against a non-existent gap. Resolved by chain agent's 10-minute compile-and-run investigation.
 
 ### 8.2 "v8 doc said tools=130; final-pre-launch-verification said tools=128"
 
@@ -424,8 +459,8 @@ Every load-bearing claim above is cross-referenced to:
 - Live empirical probes:
   - `git log -1` HEAD = `bc5043e`
   - `git log --oneline | wc -l` = 1,357 lifetime commits
-  - `curl /healthz` = v1.3.0/tools=111 (2026-05-10)
-  - `grep -rE 'mcp\.NewTool\(' mcp/` = 130 in-tree
+  - `curl /healthz` = v1.3.0/tools=111 (2026-05-10, re-verified 2026-05-11 = same)
+  - **Tool count empirical methodology** (lesson learned 2026-05-11; see §5.6 + §8.6): authoritative count comes from compile-and-run, NOT grep. Method 1: `go build -o /tmp/kmcp-test . && OAUTH_JWT_SECRET=… ALERT_DB_PATH=… /tmp/kmcp-test` and read the `total_available=N` startup log line. Method 2: `curl /healthz | jq .tools` (production runtime). Method 3 (NOT authoritative — over-counts): `grep -rE 'mcp\.NewTool\(' mcp/`. The grep over `mcp/` over-counts by ~19 because it includes test-fixture `mcp.NewTool(...)` calls in `_test.go` files which are never registered in production. Always footnote the method when reporting any code-grep number.
   - `ls D:/Sundeep/projects/algo2go/` = 28 modules
   - `cat go.work` = 4 in-tree workspace members
 - `MEMORY.md` (user's auto-memory; orchestrator-scoped)
