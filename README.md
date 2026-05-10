@@ -214,7 +214,7 @@ The official server is the right choice for read-only, zero-setup use. This serv
 
 ## Registry
 
-Listed on the [official MCP Registry](https://modelcontextprotocol.info/tools/registry/) as `io.github.sundeepg98/kite-mcp-server`. Auto-indexed by [Smithery](https://smithery.ai) and [Glama](https://glama.ai). See [`server.json`](server.json).
+Submission to the [official MCP Registry](https://modelcontextprotocol.info/tools/registry/) is pending — the `io.github.Sundeepg98/kite-mcp-server` namespace is reserved via [`server.json`](server.json) and will be published once final pre-launch verification completes. Auto-indexing by [Smithery](https://smithery.ai) and [Glama](https://glama.ai) follows registry publication.
 
 ## Contributing / funding
 
@@ -252,14 +252,14 @@ Listed on the [official MCP Registry](https://modelcontextprotocol.info/tools/re
 
 | Control | Default | Where enforced |
 |---------|---------|----------------|
-| Per-calendar-second order cap (9/sec) | Enforced | `kc/riskguard/per_second.go` (defensive; SEBI threshold = 10) |
-| Per-minute order cap (10/min) | Enforced | `kc/riskguard/guard.go` |
-| Daily order count cap | 20/day | `kc/riskguard/guard.go` |
-| Per-order value cap | Rs 50,000 | `kc/riskguard/guard.go` |
-| Daily cumulative value cap | Rs 2,00,000 | `kc/riskguard/guard.go` |
-| Human confirmation on every order | Required (MCP elicitation) | `mcp/elicit.go` |
-| Audit hash-chain | Tamper-evident | `kc/audit/store.go` |
-| Per-user OAuth + encrypted credentials | AES-256-GCM via HKDF | `kc/crypto/` |
+| Per-calendar-second order cap (9/sec) | Enforced | `algo2go/kite-mcp-riskguard/per_second.go` (defensive; SEBI threshold = 10) |
+| Per-minute order cap (10/min) | Enforced | `algo2go/kite-mcp-riskguard/guard.go` |
+| Daily order count cap | 20/day | `algo2go/kite-mcp-riskguard/guard.go` |
+| Per-order value cap | Rs 50,000 | `algo2go/kite-mcp-riskguard/guard.go` |
+| Daily cumulative value cap | Rs 2,00,000 | `algo2go/kite-mcp-riskguard/guard.go` |
+| Human confirmation on every order | Required (MCP elicitation) | `mcp/common/elicit.go` |
+| Audit hash-chain | Tamper-evident | `algo2go/kite-mcp-audit/` |
+| Per-user OAuth + encrypted credentials | AES-256-GCM via HKDF | `algo2go/kite-mcp-alerts/crypto.go` |
 | Static egress IP whitelist | 209.71.68.157 (Fly.io bom) | Operator's Kite developer console |
 | ENABLE_TRADING flag | `false` on hosted | Path 2 compliance |
 
