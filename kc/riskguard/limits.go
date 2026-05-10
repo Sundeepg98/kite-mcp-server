@@ -8,7 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // limits.go — UserLimits type + per-collaborator Set* hooks +

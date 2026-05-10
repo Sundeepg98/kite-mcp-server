@@ -29,7 +29,7 @@ require (
 require (
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
 )
 
@@ -75,7 +75,7 @@ replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
-	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
+	github.com/algo2go/kite-mcp-logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
 	github.com/zerodha/kite-mcp-server/kc/users => ../users
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth

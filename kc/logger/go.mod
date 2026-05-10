@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/logger
+module github.com/algo2go/kite-mcp-logger
 
 go 1.25.0
 

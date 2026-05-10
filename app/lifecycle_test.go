@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // TestLifecycleManager_AppendOrderRespected proves the FIFO-on-append

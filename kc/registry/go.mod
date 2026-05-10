@@ -21,7 +21,7 @@ require (
 	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-logger v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
 )
 
@@ -48,5 +48,5 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
+	github.com/algo2go/kite-mcp-logger => ../logger
 )

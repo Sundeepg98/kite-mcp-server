@@ -7,7 +7,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // Wave D Phase 3 Package 5 (Logger sweep): all use cases in this file

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // QueryAuditHook is called after every query use case execution for observability.

@@ -14,7 +14,7 @@ import (
 	hplugin "github.com/hashicorp/go-plugin"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard/checkrpc"
 
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // SubprocessCheckConfig wires a subprocess-based Check into the

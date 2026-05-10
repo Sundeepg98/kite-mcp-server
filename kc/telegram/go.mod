@@ -59,7 +59,7 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/algo2go/kite-mcp-i18n v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-logger v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000 // indirect
@@ -85,7 +85,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/instruments => ../instruments
-	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
+	github.com/algo2go/kite-mcp-logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates

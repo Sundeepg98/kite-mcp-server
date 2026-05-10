@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // Monitor polls for OPEN paper orders and fills them when the LTP crosses

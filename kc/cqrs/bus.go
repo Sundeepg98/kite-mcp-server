@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // CommandBus dispatches commands to their registered handlers.

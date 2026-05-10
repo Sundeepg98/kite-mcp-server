@@ -15,7 +15,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/algo2go/kite-mcp-isttz"
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // BrokerDataProvider abstracts broker API calls for testability.

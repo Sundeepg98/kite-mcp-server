@@ -1,7 +1,7 @@
 package providers
 
 import (
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	logport "github.com/algo2go/kite-mcp-logger"
 )
 
 // logger_port.go — Anchor 6 PR 6.13 (per .research/tier-5-and-anchor-
