@@ -17,6 +17,7 @@ require (
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/algo2go/kite-mcp-users v0.1.0
+	github.com/algo2go/kite-mcp-watchlist v0.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0
@@ -38,7 +39,6 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-watchlist v0.1.0
 	github.com/zerodha/kite-mcp-server/plugins v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
@@ -98,7 +98,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/ticker => ./kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ./kc/usecases
-	github.com/algo2go/kite-mcp-watchlist => ./kc/watchlist
 	github.com/zerodha/kite-mcp-server/plugins => ./plugins
 	github.com/zerodha/kite-mcp-server/testutil => ./testutil
 )

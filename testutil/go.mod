@@ -110,5 +110,4 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ../kc/usecases
-	github.com/algo2go/kite-mcp-watchlist => ../kc/watchlist
 )

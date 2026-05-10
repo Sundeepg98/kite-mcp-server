@@ -28,6 +28,8 @@ github.com/algo2go/kite-mcp-templates v0.1.0 h1:IakYl8o4F8dGJl7MSPCAqxPoKOXUvI4l
 github.com/algo2go/kite-mcp-templates v0.1.0/go.mod h1:UV6YXB2GLX+zoQZmDCFg5D6/YbhVDEIFPoTKg5eSMXY=
 github.com/algo2go/kite-mcp-users v0.1.0 h1:kgMJezCuxqSSU6YoTzqWDxxRpQs7UmHvotQwjiowaNI=
 github.com/algo2go/kite-mcp-users v0.1.0/go.mod h1:hE07oc9IPQ7ypS7y1n8FCybRyd3sr40J+3YOc5/NCJk=
+github.com/algo2go/kite-mcp-watchlist v0.1.0 h1:zhrwfb6H4/AJ/fTRqRjlPE2hx0WjvDnP4FTUl1uZo30=
+github.com/algo2go/kite-mcp-watchlist v0.1.0/go.mod h1:lJdqCYYPjhTsDohqBSsrkkjiTrmkTw5Q2AtvEO4ja+k=
 github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/FBatYVw=
 github.com/bufbuild/protocompile v0.14.1/go.mod h1:ppVdAIhbr2H8asPk6k4pY7t9zB1OU5DoEw9xY/FUi1c=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
