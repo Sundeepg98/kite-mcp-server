@@ -62,26 +62,27 @@ require (
 // (commit b92173b), kc/decorators (commit 7f71ccf), kc/i18n (commit
 // c25e37f), kc/legaldocs (commit 568895e), kc/isttz (commit bbb31da
 // — Path A.6.1 foundation), kc/scheduler (commit b2315cd —
-// Path A.6.2 dependent), kc/logger (commit e6231a9 — Path A.7), and
+// Path A.6.2 dependent), kc/logger (commit e6231a9 — Path A.7),
 // kc/templates (commit 1db565a — Path A.8' after Path A.8 kc/billing
-// halt at 71f17eb on deep-cluster cliff) to algo2go GitHub repos.
-// Phase B canary deletions (broker+money @ commit bef0b31, decorators
-// @ commit c19bca9, i18n @ commit 84aab63, legaldocs @ commit
-// 326c045, isttz+scheduler @ commit b72a7e9, kc/logger @ commit
-// 1d977b7, and kc/templates @ this commit) drop their replace
-// directives — all nine are now fetched from
-// algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
+// halt at 71f17eb on deep-cluster cliff), and kc/aop (commit 5db5165
+// — Path A.9, research-tag-gated leaf with zero non-test consumers)
+// to algo2go GitHub repos. Phase B canary deletions (broker+money @
+// commit bef0b31, decorators @ commit c19bca9, i18n @ commit 84aab63,
+// legaldocs @ commit 326c045, isttz+scheduler @ commit b72a7e9,
+// kc/logger @ commit 1d977b7, kc/templates @ commit 10b30a3, and
+// kc/aop @ this commit) drop their replace directives — all ten
+// are now fetched from algo2go/kite-mcp-broker@v0.1.0 +
+// algo2go/kite-mcp-money@v0.1.0 +
 // algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0
 // + algo2go/kite-mcp-legaldocs@v0.1.0 + algo2go/kite-mcp-isttz@v0.1.0
 // + algo2go/kite-mcp-scheduler@v0.1.0 + algo2go/kite-mcp-logger@v0.1.0
-// + algo2go/kite-mcp-templates@v0.1.0 via GOPROXY.
-// + algo2go/kite-mcp-logger@v0.1.0 via GOPROXY.
+// + algo2go/kite-mcp-templates@v0.1.0 + algo2go/kite-mcp-aop@v0.1.0
+// via GOPROXY.
 // via GOPROXY. The require lines at the top of this go.mod are the
 // operative source for those modules.
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
 	github.com/zerodha/kite-mcp-server/kc/alerts => ./kc/alerts
-	github.com/algo2go/kite-mcp-aop => ./kc/aop
 	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ./kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ./kc/cqrs

@@ -120,7 +120,6 @@ replace (
 	github.com/zerodha/kite-mcp-server => ../
 	github.com/zerodha/kite-mcp-server/app/providers => ../app/providers
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../kc/alerts
-	github.com/algo2go/kite-mcp-aop => ../kc/aop
 	github.com/zerodha/kite-mcp-server/kc/audit => ../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../kc/cqrs
