@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/algo2go/kite-mcp-templates"
 )
 
 // Signer signs and verifies arbitrary strings (implemented by kc.SessionSigner via adapter).

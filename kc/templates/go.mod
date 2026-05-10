@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/templates
+module github.com/algo2go/kite-mcp-templates
 
 go 1.25.0
 

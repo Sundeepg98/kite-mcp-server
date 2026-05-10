@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/algo2go/kite-mcp-templates"
 )
 
 // ============================================================================

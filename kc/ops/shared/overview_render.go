@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/algo2go/kite-mcp-templates"
 )
 
 // StatCard represents a single card in the Overview stats grid.

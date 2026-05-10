@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/algo2go/kite-mcp-templates"
 )
 
 // manager_lifecycle.go holds the Manager's startup/shutdown surface:

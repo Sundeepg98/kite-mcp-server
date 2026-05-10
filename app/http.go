@@ -27,7 +27,7 @@ import (
 	"github.com/algo2go/kite-mcp-i18n"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
-	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/algo2go/kite-mcp-templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"golang.org/x/crypto/bcrypt"

@@ -40,7 +40,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/stretchr/testify v1.10.0
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/oauth2 v0.36.0
@@ -79,7 +79,7 @@ replace (
 	github.com/zerodha/kite-mcp-server => ../
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/domain => ../kc/domain
-	github.com/zerodha/kite-mcp-server/kc/templates => ../kc/templates
+	github.com/algo2go/kite-mcp-templates => ../kc/templates
 	github.com/zerodha/kite-mcp-server/kc/users => ../kc/users
 	github.com/zerodha/kite-mcp-server/testutil => ../testutil
 )
