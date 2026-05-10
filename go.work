@@ -70,7 +70,6 @@ use (
 	./kc/papertrading
 	./kc/sectors
 	./kc/telegram
-	./kc/usecases
 	./plugins
 	./testutil
 )
