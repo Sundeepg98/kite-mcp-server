@@ -68,7 +68,6 @@ use (
 	.
 	./app/providers
 	./kc/audit
-	./kc/eventsourcing
 	./kc/papertrading
 	./kc/riskguard
 	./kc/sectors

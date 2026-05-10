@@ -9,6 +9,7 @@ require (
 	github.com/algo2go/kite-mcp-cqrs v0.1.0
 	github.com/algo2go/kite-mcp-decorators v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
+	github.com/algo2go/kite-mcp-eventsourcing v0.1.0
 	github.com/algo2go/kite-mcp-i18n v0.1.0
 	github.com/algo2go/kite-mcp-instruments v0.1.0
 	github.com/algo2go/kite-mcp-isttz v0.1.0
@@ -33,7 +34,6 @@ require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/app/providers v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-eventsourcing v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/sectors v0.0.0-00010101000000-000000000000
@@ -88,7 +88,6 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
 	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit
-	github.com/algo2go/kite-mcp-eventsourcing => ./kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ./kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors

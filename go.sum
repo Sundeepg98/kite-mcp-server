@@ -12,6 +12,8 @@ github.com/algo2go/kite-mcp-decorators v0.1.0 h1:UHGrpHOeHVjDTAqnr3qDY8FfMy/e1zE
 github.com/algo2go/kite-mcp-decorators v0.1.0/go.mod h1:KUTxUT4pxYffXiw/fIw456AZ7J5hhz0qR7eC7ZMVqDw=
 github.com/algo2go/kite-mcp-domain v0.1.0 h1:tLQ+7WxFolMxo4dtW3BN45WFnYvbTqsMF67tHGK+NjM=
 github.com/algo2go/kite-mcp-domain v0.1.0/go.mod h1:XsbcFNchYrahzSSN7oww+5XtSBAIavS5YmeFN8M7178=
+github.com/algo2go/kite-mcp-eventsourcing v0.1.0 h1:vsFSJ1H1CsxvSZzL7vxrDmSdZWeDyAh5UgoKLKrKZ3w=
+github.com/algo2go/kite-mcp-eventsourcing v0.1.0/go.mod h1:hwHHh2DDAjTNVdFcmIoGxopq95uRkhjepjDYbAE7lkQ=
 github.com/algo2go/kite-mcp-i18n v0.1.0 h1:37KY+MTmQKo+NIxlJcp4AYL2dmF7rZxayCJgBG0xp9M=
 github.com/algo2go/kite-mcp-i18n v0.1.0/go.mod h1:XpdXAnBcVWUWxv/GtLCauzwZPoGytLcGPRZTTo8h/DE=
 github.com/algo2go/kite-mcp-instruments v0.1.0 h1:TtJOJOFHEwRAmX7YSdhQVatqK2xLaCLDNAuGfH6kf0k=
