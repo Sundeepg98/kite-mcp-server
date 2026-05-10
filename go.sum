@@ -10,6 +10,8 @@ github.com/algo2go/kite-mcp-isttz v0.1.0 h1:9E3T/LVk0J9XCHp80keS9PPL4k+vl/9FVvMB
 github.com/algo2go/kite-mcp-isttz v0.1.0/go.mod h1:Hc4IJoSF9Ib6U930IIz8nk2iT1FLt17tgpdREv8+MgM=
 github.com/algo2go/kite-mcp-legaldocs v0.1.0 h1:9fw+JkpEW050KMFWj/JKCANZL9UTgY0KORoNfw3uGkc=
 github.com/algo2go/kite-mcp-legaldocs v0.1.0/go.mod h1:CJwnq9dgEnjLXL7V3x27VoztESE3ImZN54TCi9eSqxg=
+github.com/algo2go/kite-mcp-logger v0.1.0 h1:A+i9vnM43sZn5Y2wEz3TAks32YKCvyob1HXDyUUuTuk=
+github.com/algo2go/kite-mcp-logger v0.1.0/go.mod h1:Ffsc4kAetI15Z0QNHme9hxl28zjQI6AOWF5f3S1yJzk=
 github.com/algo2go/kite-mcp-money v0.1.0 h1:4+HEW6r0/N7h+5jsjCNJZCHYwML/SkmE8/FylcfckJ8=
 github.com/algo2go/kite-mcp-money v0.1.0/go.mod h1:bjj4XnGM+YU2B8pPKTheanSVgW6ON3t0lh2d/m7ELek=
 github.com/algo2go/kite-mcp-scheduler v0.1.0 h1:Y4kHEDXBoDL/btwPLdgHWqLly+7qYwlGrxiw7CpuswU=

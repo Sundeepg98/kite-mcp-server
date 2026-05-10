@@ -26,7 +26,6 @@ COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
 COPY kc/domain/go.mod kc/domain/go.sum* kc/domain/
 COPY kc/eventsourcing/go.mod kc/eventsourcing/go.sum* kc/eventsourcing/
 COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
-COPY kc/logger/go.mod kc/logger/go.sum* kc/logger/
 COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY kc/templates/go.mod kc/templates/go.sum* kc/templates/
 COPY kc/ticker/go.mod kc/ticker/go.sum* kc/ticker/
