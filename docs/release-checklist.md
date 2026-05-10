@@ -135,7 +135,10 @@ Do registry first so external click-throughs land on the new version.
 - [ ] Pin a Discussion under `Announcements` with a one-paragraph
       "what this means for you" at the top.
 - [ ] Optional Twitter thread — template in
-      [docs/launch/03-twitter-thread.md](launch/03-twitter-thread.md).
+      [docs/twitter-launch-kit.md](twitter-launch-kit.md). (Note: an
+      earlier path `docs/launch/03-twitter-thread.md` was referenced
+      but the `docs/launch/` directory was never created; copy is in
+      twitter-launch-kit.md.)
       Patch releases rarely need a thread; reserve for minor/major
       bumps or standout security fixes.
 - [ ] Refresh [README.md](../README.md) badges if any advertised

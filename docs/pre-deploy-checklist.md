@@ -5,7 +5,7 @@ Run through this 5-minute checklist before every `flyctl deploy`. Copy into a co
 ## Code quality
 - [ ] `go build ./...` clean
 - [ ] `go vet ./...` clean
-- [ ] Tests pass on changed packages: `go test ./kc/riskguard ./mcp ./oauth ./app -count=1`
+- [ ] Tests pass on changed packages: `go test ./mcp ./app ./kc/... -count=1` (riskguard/audit/alerts/oauth now live in `algo2go/kite-mcp-*` external modules — their tests run from each algo2go repo via `go test ./...`)
 - [ ] No new lint warnings (`staticcheck ./...` optional)
 - [ ] Any new env vars documented in `docs/env-vars.md`
 
@@ -19,7 +19,7 @@ Run through this 5-minute checklist before every `flyctl deploy`. Copy into a co
 - [ ] Disclaimer / draft banners still visible on TERMS.md, PRIVACY.md
 - [ ] "Built on Zerodha's open-source Kite MCP Server (MIT)" still in landing.html footer
 - [ ] Any new Telegram outbound message uses `sendFinancialHTML` (disclaimer-prefixed)
-- [ ] Audit trail still enabled (`kc/audit/` not broken)
+- [ ] Audit trail still enabled (`algo2go/kite-mcp-audit/` module integrated; `curl /healthz?probe=deep` shows `components.audit.status: ok` with `dropped_count: 0`)
 
 ## Fly.io infra
 - [ ] Fly.io rate limits not reduced inadvertently
@@ -46,8 +46,9 @@ git log --oneline -1
 # Deploy (remote build on Fly.io)
 flyctl deploy -a kite-mcp-server --remote-only
 
-# Verify release version bumped
-flyctl releases -a kite-mcp-server | head -3
+# Verify release version bumped (flyctl `releases` is not a subcommand;
+# use `status` to see the current machine image + version)
+flyctl status -a kite-mcp-server | head -10
 
 # Health check
 curl -s https://kite-mcp-server.fly.dev/healthz?format=json | jq
@@ -62,8 +63,8 @@ If health check fails or metrics spike:
 
 ```bash
 # Immediate rollback to prior version
-flyctl releases -a kite-mcp-server
-flyctl rollback vN -a kite-mcp-server
+flyctl releases image -a kite-mcp-server          # lists prior deployment image IDs
+flyctl releases rollback vN -a kite-mcp-server    # roll back to prior machine version N
 
 # Or take machine offline
 flyctl machine list -a kite-mcp-server
