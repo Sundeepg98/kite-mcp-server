@@ -77,7 +77,7 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-i18n v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
@@ -103,7 +103,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../cqrs
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../eventsourcing
-	github.com/zerodha/kite-mcp-server/kc/i18n => ../i18n
+	github.com/algo2go/kite-mcp-i18n => ../i18n
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard

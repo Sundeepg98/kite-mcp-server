@@ -24,7 +24,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
-	"github.com/zerodha/kite-mcp-server/kc/i18n"
+	"github.com/algo2go/kite-mcp-i18n"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/templates"

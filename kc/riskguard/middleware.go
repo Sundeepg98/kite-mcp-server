@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
-	"github.com/zerodha/kite-mcp-server/kc/i18n"
+	"github.com/algo2go/kite-mcp-i18n"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 

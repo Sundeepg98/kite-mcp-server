@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zerodha/kite-mcp-server/kc/i18n"
+	"github.com/algo2go/kite-mcp-i18n"
 )
 
 // TestRejectionMessage_KnownReason_EN returns the English translated

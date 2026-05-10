@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/i18n
+module github.com/algo2go/kite-mcp-i18n
 
 go 1.25.0
 
