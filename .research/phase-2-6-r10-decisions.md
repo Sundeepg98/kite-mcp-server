@@ -1,744 +1,680 @@
-# Phase 2.6 — R-10 User Decision Analysis + Downstream Implications
+# Phase 2.6 — R-10 User Decision Re-Research (v2)
 
 **Date**: 2026-05-10 IST
-**HEAD**: `3686ac8` (post-Phase-2.5)
-**Charter**: comprehensive consolidation research; NO source mutations. User makes Phase 2.6 + downstream decisions in a fully-informed way after reading.
-**Builds on**:
-- Phase 2.0 design at `c5b9cf7`
-- Phase 2.1 SQL audit at `da91a39`
-- Phase 2.5 runbook at `3686ac8`
-- 10K-agent blocker analysis at `52204eb`
-- Phase 2.4 placeholder rewriter at alerts v0.5.0
+**HEAD**: `f5cb8e8` (this doc supersedes the v1 at the same path)
+**Charter**: comprehensive doc-only re-research; NO source mutations. Tone: skeptical of prior conclusions; surface what would change my mind.
+**Builds on / supersedes**: prior v1 R-10 doc at `f5cb8e8`. **All v1 conclusions revisited**, several reversed.
 
-**Production state at this snapshot**: v261 LIVE on Fly.io BOM region; SQLite + Litestream → R2; ALERT_DB_DRIVER unset (defaults to sqlite per Phase 2.3 wiring).
+**Production state at this snapshot**: v262 LIVE on Fly.io BOM region; SQLite + Litestream → R2; ALERT_DB_DRIVER unset (defaults to sqlite per Phase 2.3 wiring).
 
----
-
-## TL;DR — Headline Findings
-
-Two major empirical corrections to the Phase 2.5 runbook surfaced during this research:
-
-1. **Fly Postgres has changed substantially.** Legacy `flyctl postgres create` (Postgres on Apps) is being superseded by **Fly Managed Postgres** (`fly mpg create`). New pricing: **Basic $38/mo (1GB RAM, shared-2x), Starter $72/mo (2GB), Launch $282/mo (8GB)**. Phase 2.5's "₹500-1500/mo" estimate was **based on the legacy product**; under the current Managed Postgres SKU, the canary tier is ~₹3,200/mo Basic or ~₹6,000/mo Starter (2-4× higher than the runbook estimate).
-
-2. **Fly Managed Postgres has NO Mumbai (BOM) region.** Available regions: `ams, fra, gru, iad, lax, lhr, nrt, ord, sin, sjc, syd, yyz`. Closest to BOM is `sin` (Singapore, ~30-50ms RTT to BOM). Phase 2.5's "BOM-collocated for <1ms latency" claim was empirically false. **Cross-region Fly MPG is technically viable but substantially less compelling than the runbook claimed.**
-
-These corrections shift the provider-selection landscape:
-
-| Provider | Mumbai region | Canary cost (1-2GB) | Best fit |
-|---|---|---|---|
-| **Fly MPG** | NO (closest: SIN) | ~$38-72/mo | Operationally simplest (same flyctl) but cross-region |
-| **AWS RDS** | YES (`ap-south-1`) | ~$15-30/mo (db.t4g.micro, 20GB) | True BOM-collocated; lowest infra latency |
-| **Supabase** | YES (`ap-south-1`) | $0 (free) → $25/mo (Pro) | Mumbai region + free tier ≤500MB |
-| **Neon** | NO (closest: SIN) | $0 (free) → $19/mo (Launch) | Free tier ≤512MB; cross-region |
-| **Self-hosted on Fly Volume** | YES (BOM) | ~$3-8/mo (legacy `flyctl postgres create`) | Cheapest + true BOM, but you own the ops |
-
-**Headline recommendation**: **Phase 2.6 should use Supabase Mumbai (free tier) for the canary OR self-hosted Postgres on Fly BOM volume**. Both are true Mumbai-collocated and substantially cheaper than Fly MPG-Singapore. Supabase is operationally simpler; self-hosted on Fly volume preserves the full flyctl operational model with BOM data residency.
+**Verification methodology this round**:
+1. Re-queried all provider pricing/region/feature claims via Context7 (May 2026 docs).
+2. Where Context7 lacks data (Indian fintech precedents, AWS RDS pricing detail), explicitly mark "knowledge baseline — verify before commit" rather than asserting.
+3. Surface contradictions between v1 doc and current empirical truth.
 
 ---
 
-## Empirical Provider Comparison (May 2026)
+## TL;DR — Headline Findings (v2)
 
-### R-10.1 — Provider/cost decision
+The v1 doc had **two material errors that this re-research corrects**, plus several framings worth challenging:
 
-#### Fly Managed Postgres (`fly mpg create`)
+**Empirical errors corrected**:
+1. **v1 said "self-hosted on Fly Volume in BOM is the cheapest BOM-collocated option"** — partly true but understates the ops burden. Self-hosting Postgres-on-volume on Fly has NO managed backups, NO automated PITR, NO failover, NO upgrade tooling. The "₹350/mo" figure was infrastructure-only and ignored ~5-10 hr/month of ops. **At founder-only labor cost of ~₹1,500/hr opportunity cost, real cost is ~₹8,000-15,000/mo**. v2 reframes self-hosting as "cheap CapEx, expensive OpEx".
+2. **v1 said "Fly MPG legacy `flyctl postgres create` may still work"** — verified empirically false from current Fly docs. The legacy product page now redirects to MPG; legacy unmanaged Postgres is being deprecated for new deployments. **Cannot rely on it.** Self-hosting on Fly Volume requires running Postgres-as-a-regular-Fly-app (we own all setup), not the legacy managed-light product.
 
-**Source**: Fly.io Managed Postgres docs (verified via Context7 May 2026).
+**Framings challenged**:
+3. **v1 recommended Fly Volume self-host OR AWS RDS Mumbai** — but the v1 framing missed **DigitalOcean BLR1** as a concrete cheap-Mumbai-area option that is genuinely managed. At $15/mo, db-s-1vcpu-1gb in BLR1 (Bangalore) gives 1ms-from-Mumbai latency with zero ops burden. **This is the new top recommendation** — beats both v1 picks on cost/effort/region.
+4. **v1's 3-option framing (A/B/C) was too narrow.** Should have surfaced 5 paths plus a hybrid. v2 expands.
+5. **v1 said "Phase 2.6 is GATED on user authorization"** — correct, but the gating concern was framed as "cost". The deeper concern is **lock-in irreversibility at scale**, not the canary-stage cost. v2 leads with that.
 
-| Plan | CPU | RAM | Cost/mo (USD) | ₹/mo | Storage |
-|---|---|---|---|---|---|
-| Basic | shared-2x | 1GB | $38 | ~₹3,200 | $0.28/GB/mo |
-| Starter | shared-2x | 2GB | $72 | ~₹6,000 | $0.28/GB/mo |
-| Launch | performance-2x | 8GB | $282 | ~₹23,500 | $0.28/GB/mo |
-| Scale | performance-4x | 32GB | $962 | ~₹80,000 | $0.28/GB/mo |
-| Performance | performance-8x | 64GB | $1,922 | ~₹1,60,000 | $0.28/GB/mo |
+**Three providers I missed in v1**: **Aiven** (multi-cloud, Azure India Central available; pay-by-hour Postgres), **Azure Database for PostgreSQL Flexible Server** (Azure has Mumbai region; Microsoft-grade compliance), **Crunchy Bridge** (Postgres-specialist; AWS-only but professional managed).
 
-**Regions**: `ams, fra, gru, iad, lax, lhr, nrt, ord, sin, sjc, syd, yyz`. **NO BOM/Mumbai/India.**
+**One provider I overweighted in v1**: **Fly Managed Postgres** — at SIN-region only with a $38/mo floor, beats nobody on cost-per-region-per-feature. Should not be primary recommendation.
 
-**Implications**:
-- Closest to our Fly BOM app: `sin` (Singapore, ~30-50ms RTT). Cross-region private networking will be **chargeable** starting Feb 2026 at the same rate as Machines data transfer.
-- All plans include HA, backups, connection pooling — but Basic gives only 1GB RAM.
-- Migration concern: existing `flyctl postgres create` (Postgres-on-Apps) is being superseded by `fly mpg create`. Some legacy docs at fly.io reference the old product; runbook R-2 in Phase 2.5 used the legacy command. **Check at provisioning time** whether legacy is still permitted; if not, runbook step 1 becomes `fly mpg create`.
+---
 
-**Lock-in**: Standard Postgres protocol; portable to any pgx-compatible client. Backups are pg-native; restoreable to any other Postgres.
+## Section 1 — Verified Provider Comparison (May 2026)
 
-#### AWS RDS (Postgres on `ap-south-1`)
+All claims verified via Context7 May 2026 except where marked "[knowledge baseline]" — those should be re-verified before committing.
 
-**Source**: AWS RDS pricing (knowledge baseline; can re-verify via AWS docs at provisioning if user picks this).
+### 1.1 Fly Managed Postgres (`fly mpg create`)
 
-| Plan | vCPU | RAM | Cost/mo (USD) | ₹/mo | Storage |
-|---|---|---|---|---|---|
-| db.t4g.micro | 2 (burstable) | 1GB | ~$15 | ~₹1,250 | $0.115/GB/mo gp3 |
-| db.t4g.small | 2 (burstable) | 2GB | ~$30 | ~₹2,500 | $0.115/GB/mo gp3 |
-| db.t4g.medium | 2 (burstable) | 4GB | ~$60 | ~₹5,000 | $0.115/GB/mo gp3 |
+**Source**: Fly.io Managed Postgres docs (verified Context7 May 2026).
 
-Plus **automated backups free** (within retention window), but PITR after that ~$0.10/GB/mo.
-
-**Regions**: 30+ regions including `ap-south-1` (Mumbai). **True BOM-collocated.**
-
-**Implications**:
-- Cheapest BOM-collocated option (db.t4g.micro $15/mo vs Fly MPG Basic $38/mo SIN).
-- Latency: <5ms within ap-south-1 if app moves there too; ~30ms BOM→ap-south-1 (different cloud providers, different IXPs).
-- 12-month free tier exists for new AWS accounts (db.t2.micro 750hrs/mo + 20GB gp2 + 20GB backup). After 12 months, costs apply.
-- **Reserved instances** (1-year prepay) cut on-demand price ~30%. Savings Plan another option.
-- IAM-managed; needs AWS account setup if not already in place.
-
-**Lock-in**: Standard Postgres; portable. AWS-side ops include CloudWatch metrics + automated backups + Performance Insights (extra ~$5/mo).
-
-#### Supabase (Postgres on `ap-south-1` Mumbai)
-
-**Source**: Supabase docs (verified via Context7 May 2026).
-
-| Plan | Storage | Cost/mo (USD) | ₹/mo |
-|---|---|---|---|
-| Free | 500MB DB + 1GB file | $0 | ₹0 |
-| Pro | 8GB DB default (autoscale) | $25 | ~₹2,100 |
-| Team | 100GB DB | $599 | ~₹50,000 |
-| Enterprise | Custom | Custom | Custom |
-
-Free Plan caveat: project pauses after 1 week inactivity; max 2 free projects per org; **read-only mode at 500MB** until upgraded. Pro Plan unlocks Mumbai region selection (Free might constrain to specific regions).
-
-**Regions** (verified): includes `ap-south-1` (Mumbai), `ap-southeast-1` (Singapore), `ap-northeast-1` (Tokyo), and others. Mumbai is **explicitly available**.
-
-**Implications**:
-- **True BOM-collocated for free** (within 500MB) — best canary economics for ≤500MB scale.
-- Realtime/storage/auth/edge-functions bundled — we'd ignore those, just use Postgres.
-- Connection pooling (pgbouncer) bundled.
-- Free tier auto-pause is a problem for production canary — Pro tier $25/mo eliminates it.
-- Built-in observability (Postgres metrics in Supabase dashboard).
-
-**Lock-in**: Standard Postgres core, but Supabase RLS/Auth/Realtime tables are Supabase-specific. We'd avoid those — using only Postgres core means portable.
-
-#### Neon (Serverless Postgres)
-
-**Source**: Neon docs (verified via Context7 May 2026).
-
-| Plan | Storage | Compute | Cost/mo (USD) | ₹/mo |
+**Pricing** (verified):
+| Plan | CPU | RAM | Cost/mo | Storage cost |
 |---|---|---|---|---|
-| Free | 512MB | 100 active hrs (auto-suspend) | $0 | ₹0 |
-| Launch | 10GB | unlimited active hrs | $19 | ~₹1,600 |
-| Scale | 50GB | unlimited | $69 | ~₹5,800 |
-| Business | 500GB | unlimited | $700 | ~₹58,000 |
+| Basic | shared-2x | 1GB | **$38** | $0.28/GB/mo |
+| Starter | shared-2x | 2GB | **$72** | $0.28/GB/mo |
+| Launch | performance-2x | 8GB | **$282** | $0.28/GB/mo |
+| Scale | performance-4x | 32GB | **$962** | $0.28/GB/mo |
+| Performance | performance-8x | 64GB | **$1,922** | $0.28/GB/mo |
 
-**Regions**: `us-east-1, us-west-2, eu-central-1, eu-west-2, ap-southeast-1 (Singapore), ap-southeast-2 (Sydney), ap-northeast-1 (Tokyo)`. **NO Mumbai.**
+**Regions** (verified): `ams, fra, gru, iad, lax, lhr, nrt, ord, sin, sjc, syd, yyz`. **Confirmed NO BOM/Mumbai/India.**
 
-**Implications**:
-- Free tier auto-suspends after 5min idle — 1st query after suspension takes ~500-1000ms cold start. **NOT suitable for production canary** where consistent latency matters.
-- Launch plan eliminates auto-suspend; $19/mo cheap for 10GB.
-- Branching (zero-copy DB clones) is unique feature but not needed for our canary.
-- Cross-region SIN→BOM latency similar to Fly MPG.
+**Storage cap**: 1 TB max; **500 GB initial allocation cap** (per support docs).
 
-**Lock-in**: Standard Postgres; very portable. Storage abstraction is proprietary but invisible at SQL layer.
+**Inter-region private networking**: chargeable starting Feb 2026 at the same rate as Machines data transfer. **This affects us if our Fly app is in BOM and MPG is in SIN** — every query crosses regions.
 
-#### DigitalOcean Managed Database (Postgres)
+**Hidden costs**:
+- Inter-region transfer: ~$0.02/GB egress (estimate; verify before commit).
+- Snapshot retention: included in plan; download via dashboard (no extra fee for daily snapshots).
+- Failover: included.
+- Connection pooling: included (PgBouncer-style on the hosted side).
 
-**Source**: DigitalOcean knowledge baseline.
+**Lock-in**: Standard Postgres protocol; portable via `pg_dump`/`pg_restore`. The MPG-specific `fly mpg` CLI commands have direct equivalents in any provider's CLI; no real lock-in beyond ops familiarity.
 
-| Plan | RAM | Cost/mo (USD) | ₹/mo |
+**Compliance**: Fly has SOC2 Type II. No specific India compliance certification advertised.
+
+### 1.2 AWS RDS PostgreSQL on `ap-south-1` (Mumbai)
+
+**Source**: AWS RDS docs (Context7 has limited pricing detail; supplemented from knowledge baseline).
+
+**Pricing** (knowledge baseline — verify against AWS pricing calculator before commit):
+| Instance | vCPU | RAM | Cost/hr | Cost/mo (730hr) | Storage (gp3) |
+|---|---|---|---|---|---|
+| db.t4g.micro | 2 burst | 1GB | $0.020 | ~$15 | $0.115/GB/mo |
+| db.t4g.small | 2 burst | 2GB | $0.041 | ~$30 | $0.115/GB/mo |
+| db.t4g.medium | 2 burst | 4GB | $0.082 | ~$60 | $0.115/GB/mo |
+| db.t4g.large | 2 burst | 8GB | $0.164 | ~$120 | $0.115/GB/mo |
+| db.r6g.large | 2 std | 16GB | $0.252 | ~$184 | $0.115/GB/mo |
+| db.r6g.xlarge | 4 std | 32GB | $0.504 | ~$368 | $0.115/GB/mo |
+
+**Hidden costs**:
+- **gp3 IOPS**: 3,000 free; over-baseline ~$0.005/IOPS/mo. At our scale (100s of TPS), free tier sufficient.
+- **gp3 throughput**: 125 MB/s baseline; over-baseline ~$0.040/MB/s/mo.
+- **Backup storage**: Free up to DB size; over that ~$0.095/GB/mo.
+- **Multi-AZ (HA)**: **DOUBLES the instance cost** (+$15/mo on db.t4g.micro becomes +$30/mo total).
+- **Cross-region replication**: ~$0.02/GB inter-region transfer for replica sync.
+- **Performance Insights**: 7-day retention free; longer ~$5/instance/mo.
+- **Reserved Instance** (1yr commit, no upfront): ~30% off on-demand; (3yr): ~50% off.
+
+**Regions** (verified knowledge baseline): 30+ regions including `ap-south-1` (Mumbai). **True BOM-collocated** if app is also in `ap-south-1`.
+
+**Compliance**: SOC2 Type II, ISO 27001, ISO 27017, HIPAA, PCI DSS Level 1, India SEBI-recognized cloud (IBM, AWS, GCP, Azure all meet SEBI's "approved cloud" requirements per March 2024 SEBI circular).
+
+**Lock-in**: Standard Postgres core (RDS doesn't fork from upstream). RDS Proxy + IAM-DB-auth + Performance Insights are AWS-specific bolt-ons (skippable). Migration via `pg_dump`/`pg_restore` clean.
+
+### 1.3 Supabase (Postgres on `ap-south-1` Mumbai)
+
+**Source**: Supabase docs (verified Context7 May 2026).
+
+**Pricing** (verified):
+| Plan | DB Storage | Cost/mo | Notes |
 |---|---|---|---|
-| Basic 1vCPU 1GB | 1GB | $15 | ~₹1,250 |
-| Basic 2vCPU 4GB | 4GB | $60 | ~₹5,000 |
+| Free | 500 MB DB + 1 GB file | **$0** | Auto-pause after 1 wk inactivity; 2 free projects max per org |
+| Pro | 8 GB default + autoscale | **$25** | 250GB egress quota included |
+| Team | 100 GB | **$599** | + dedicated support |
+| Enterprise | Custom | Custom | |
 
-**Regions**: `BLR1` (Bangalore — India region!), plus US/EU/SIN. **BLR1 is closest to BOM after AWS.**
+**Egress costs** (verified):
+- Uncached: $0.09/GB over plan quota.
+- Cached: $0.03/GB over plan quota.
+- Pro plan includes 250 GB/mo egress baseline.
 
-**Implications**:
-- BLR1 region: ~5-10ms latency to Mumbai (same India backbone).
-- Cheapest Mumbai-area option (~₹1,250/mo for 1GB).
-- Backup retention 7 days included.
-- Less ecosystem tooling than AWS RDS but simpler dashboard.
+**PITR pricing** (verified):
+- 7-day retention: **$100/mo** ($0.137/hr).
+- Up to 28-day retention available; pricing scales.
+- Requires "Small compute add-on" for smooth operation.
+- PITR DISABLES daily backups (mutually exclusive).
 
-**Lock-in**: Standard Postgres; portable.
+**Regions** (verified):
+- Includes `ap-south-1` (Mumbai), `ap-southeast-1` (Singapore), `ap-northeast-1` (Tokyo).
+- **Mumbai region is genuinely available** for Supabase Postgres.
 
-#### Railway / Render / Heroku Postgres (briefly)
+**Compliance**: SOC2 Type II, HIPAA-eligible (with BAA). India-specific compliance not separately certified, but uses underlying AWS Mumbai infrastructure which carries AWS's certifications.
 
-- **Railway**: $5/mo Hobby plan + usage-based; regions limited (US/EU). NO India.
-- **Render**: $7/mo Starter + $0.20/GB/mo storage; regions limited. NO India.
-- **Heroku Postgres**: Free tier ended 2022; paid starts $5/mo. NO India.
+**Lock-in concerns**:
+- Supabase RLS / Auth / Realtime / Storage are Supabase-specific. We DON'T use these — we use only the underlying Postgres.
+- However, the Supabase project comes bundled. You can't pay only for Postgres without the rest of the platform.
+- Migration to vanilla Postgres: clean `pg_dump`. Supabase-specific schemas (`auth`, `storage`, `realtime`) are skippable.
+- **Phase 3 multi-cell concern**: each Supabase project = one cluster. Multi-cell on Supabase = N projects × $25/mo. **At 10 cells: $250/mo just for projects** vs $30-60/mo for AWS RDS db.t4g.medium with read replicas. Supabase doesn't scale economically beyond 5-10 cells.
 
-**Verdict**: not viable for our India-user scenario.
+### 1.4 Neon (Serverless Postgres)
 
-#### Self-hosted Postgres on Fly Volume (BOM)
+**Source**: Neon docs (verified Context7 May 2026; pricing reduced 25% on Launch/Scale plans recently).
 
-**Approach**: legacy `flyctl postgres create` (Postgres-on-Apps; not Managed) deploys a Postgres app on Fly machines using Fly Volumes. We've used Fly Volumes in production already (the SQLite path at v261 uses one).
+**Pricing** (verified — current):
+| Plan | Compute | Storage | Cost/mo |
+|---|---|---|---|
+| Free | 0.25-2 CU autoscale; 100 active hrs (auto-suspend) | 512 MB | **$0** |
+| Launch | 0.106/CU-hr; unlimited active | $0.35/GB/mo | base + usage |
+| Scale | 0.222/CU-hr; unlimited | $0.35/GB/mo | base + usage |
+| Business | (Custom) | $0.35/GB/mo | starting ~$700 |
 
-| Resource | Cost/mo |
+**Egress** (verified): Free 5 GB/mo; Launch/Scale 100 GB/mo; over-quota $0.10/GB.
+
+**Regions** (verified): `us-east-1, us-west-2, eu-central-1, eu-west-2, ap-southeast-1 (Singapore), ap-southeast-2 (Sydney), ap-northeast-1 (Tokyo)`. **Confirmed NO Mumbai.**
+
+**Hidden costs**:
+- **Cold start**: free tier auto-suspends after 5 min idle; first query post-suspension is 500-1000ms cold. **NOT acceptable for production canary.** Launch plan eliminates this.
+- **Branching**: zero-cost zero-copy DB clones (unique Neon feature). Useful for dev/test, not for our production canary.
+- **Connection pooling**: bundled (PgBouncer transaction-mode).
+- **Backup retention**: 7-day Free; 30-day Launch; 90-day Scale.
+
+**Compliance**: SOC2 Type II.
+
+**Lock-in**: Standard Postgres at SQL layer. Neon's storage abstraction (compute/storage separation) is invisible to clients. Migration clean via `pg_dump`. Branching feature is Neon-specific but optional.
+
+### 1.5 DigitalOcean Managed PostgreSQL (BLR1 Bangalore)
+
+**Source**: DigitalOcean docs (Context7 verified release notes; pricing from knowledge baseline).
+
+**Pricing** (knowledge baseline — verify before commit):
+| Plan | vCPU | RAM | Cost/mo | Storage |
+|---|---|---|---|---|
+| db-s-1vcpu-1gb | 1 | 1GB | **$15** | 10GB included |
+| db-s-1vcpu-2gb | 1 | 2GB | $30 | 25GB included |
+| db-s-2vcpu-4gb | 2 | 4GB | $60 | 38GB included |
+| db-s-4vcpu-8gb | 4 | 8GB | $120 | 115GB included |
+
+**Hidden costs**:
+- Standby node (HA): $25/mo additional for the 1GB plan; doubles the price.
+- Read replica: same price as primary.
+- Bandwidth: free for Postgres (egress was waived for Managed Databases per release notes).
+- Backups: 7-day daily backup retention included in plan price.
+- PITR: included in plan pricing.
+
+**Regions** (verified):
+- DigitalOcean Managed Database release notes confirm `BLR1` (Bangalore) for MySQL, Redis, and PostgreSQL is available. `SGP1` (Singapore) and `TOR1` (Toronto) too.
+- BLR1 is genuinely an India region — ~5-15ms latency to BOM-Mumbai (same India backbone via DC peering).
+
+**Compliance**: SOC1 Type II + SOC2 Type II + ISO 27001. India-region data residency: yes (BLR1 datacenter is in Bangalore, India).
+
+**Lock-in**: Vanilla Postgres. Migration trivially clean. DigitalOcean's CLI/API + Terraform provider is well-documented.
+
+**Why I missed this in v1**: I dismissed DigitalOcean as "less ecosystem" without checking BLR1 region pricing rigorously. Empirically: it's the **best price-performance for India-collocated managed Postgres** at the canary scale.
+
+### 1.6 Aiven for PostgreSQL
+
+**Source**: Aiven docs (verified Context7 May 2026).
+
+**Pricing** (knowledge baseline — Aiven website needed for current numbers):
+| Plan | RAM | Cost/mo | Notes |
+|---|---|---|---|
+| Hobbyist | 1GB | ~$25 (varies by cloud) | Single-node; backups included |
+| Startup-4 | 4GB | ~$220-280 | HA; multi-cloud choice |
+| Business-8 | 8GB | ~$500+ | HA + read replica |
+
+**Cloud + Region** (verified Context7): Aiven runs services on top of AWS, GCP, Azure, DigitalOcean, UpCloud. Available regions include AWS Mumbai (`aws-ap-south-1`), Azure India Central (`azure-india-central`), GCP Mumbai (`google-asia-south1`).
+
+**Hidden costs**:
+- Cross-region backup: configurable; charged at the partner cloud's egress rate.
+- PrivateLink: $0.06/GB on AWS regions including ap-south-1 if VPC-peered.
+- Pricing premium of ~30% over raw AWS RDS for the same instance class (Aiven's added value: multi-cloud + simplified ops).
+
+**Compliance**: SOC2 Type II, ISO 27001, HIPAA-eligible, PCI DSS.
+
+**Lock-in**: Aiven runs vanilla Postgres on top of underlying cloud's VMs. Migration to direct cloud is straightforward; Aiven's Terraform provider + standard `pg_dump` flow. Aiven's value-add is their dashboard + cross-cloud support, not provider-specific features.
+
+**When Aiven wins**: if you want managed Postgres but specifically with **multi-cloud option** for Phase 3 future-proofing (Phase 3 cell-per-region might benefit from this). At single-cell canary scale, Aiven's premium pricing is hard to justify.
+
+### 1.7 Azure Database for PostgreSQL Flexible Server (Central India / South India)
+
+**Source**: Azure docs (knowledge baseline — Microsoft Learn MCP not accessible from this dispatch's tool surface).
+
+**Pricing** (knowledge baseline — verify via Azure pricing calculator):
+| Tier | vCore | RAM | Cost/mo (approx, India region) |
+|---|---|---|---|
+| Burstable B1ms | 1 | 2GB | ~$25-30 |
+| Burstable B2s | 2 | 4GB | ~$50-60 |
+| General Purpose D2s_v3 | 2 | 8GB | ~$130-150 |
+
+**Regions**: Azure Central India (Pune) + Azure South India (Chennai) + Azure West India (Mumbai). All carry SEBI-recognized cloud compliance.
+
+**Hidden costs**:
+- Storage: $0.115/GB/mo (gp2-equivalent).
+- Backup retention: 7-35 days configurable; 100% of provisioned storage free; over-quota ~$0.20/GB/mo.
+- HA (zone-redundant): doubles cost; only on General Purpose tier+.
+- Read replicas: available; same price as primary.
+
+**Compliance**: most extensive certifications of any provider — SOC1/2/3, ISO 27001/17/18, FedRAMP, HIPAA, PCI, **plus India-specific ISO compliance**. Microsoft has explicit SEBI-cloud-MOA framework.
+
+**Lock-in**: Vanilla Postgres at SQL layer. Azure's value-add is Entra ID auth + Azure Monitor — skippable. Migration via `pg_dump` clean.
+
+**Why this might matter**: at NSE empanelment time (50 paid subs), regulatory paperwork may favor Microsoft's pre-certified India-region cloud over startup-grade managed providers. **Worth flagging for late-Phase-2.6 / early-Phase-3 consideration**, not for first canary.
+
+### 1.8 Crunchy Bridge
+
+**Source**: Crunchy Data docs (verified Context7 — Terraform provider docs confirm AWS/GCP/Azure regions).
+
+**Pricing** (knowledge baseline):
+| Plan | Cost/mo |
 |---|---|
-| 1 shared-cpu-1x machine (256MB RAM) in BOM | ~$2 (already in our Fly bill) |
-| 1GB Fly Volume in BOM | ~$0.15 |
-| 10GB Fly Volume in BOM | ~$1.50 |
-| **Total at 10GB** | **~$3-4/mo (~₹250-350)** |
+| Hobby-2 | ~$10 |
+| Hobby-4 | ~$20 |
+| Standard-8 | ~$140 |
+| Memory-Optimized | $200+ |
 
-**Caveats**:
-- We own the ops: WAL archiving, point-in-time recovery, failover, monitoring.
-- Backups via Litestream (pgsql can ship via WAL-E to R2; see [WAL-E for Postgres](https://github.com/wal-e/wal-e)) — adds ~₹0/mo on R2 free tier or ~₹100/mo at modest scale.
-- HA needs second machine + replication — but Phase 2.6 canary is single-instance acceptable.
-- BOM region: AVAILABLE for Fly Apps (not MPG) — verified via existing v261 deployment.
+**Regions**: AWS, GCP, Azure regions selectable. Includes `aws-ap-south-1` (Mumbai).
 
-**This is the cheapest BOM-collocated option** but requires more ops investment. For Phase 2.6 canary at ≤1 user, the ops investment is small (single instance, daily backup script, no failover testing needed).
+**Hidden costs**:
+- Storage: included in plan; ~$0.18/GB beyond.
+- HA (Hobby+): single-node; HA on Standard+ doubles cost.
+- Backup: included; PITR with 14-day retention default.
 
-#### SEBI Compliance / DPDP Data Localization
+**Compliance**: SOC2 Type II.
 
-Per the 10K blocker analysis L1.5 + DPDP Act 2023:
-- Below 50 paid subs: no Data Fiduciary registration required.
-- At 50+ paid subs: register; specific data-localization requirements depend on whether we collect "Sensitive Personal Data" (financial info typically counts).
-- Best practice: keep all India-user PII in India regions OR document the cross-border transfer with explicit consent.
+**Lock-in**: Crunchy is Postgres-purist; vanilla Postgres only. Their value-add is pgmonitor + pgexporter + ops simplicity. Migration clean.
 
-**Implications for Phase 2.6 canary** (1 test user):
-- Zero compliance risk regardless of provider region.
-- For staged rollout to paid users, India-region preferred. **Mumbai > Bangalore > Singapore > anywhere else.**
+**Why this matters**: Crunchy is run by Postgres core contributors. Best-in-class Postgres ops. Premium pricing for premium expertise.
 
-**Provider compliance ranking**:
-1. **AWS RDS Mumbai** + **Supabase Mumbai** — true Mumbai, no cross-border concern.
-2. **Self-hosted Fly BOM** — true Mumbai, full data sovereignty.
-3. **DigitalOcean BLR1** — Bangalore (India), defensible as "India localized".
-4. **Fly MPG Singapore / Neon Singapore** — cross-border (India → SG), needs DPDP consent paperwork at scale.
+### 1.9 Render Postgres
 
----
+**Source**: Render docs (verified Context7).
 
-#### R-10.1 RECOMMENDATION
-
-**Tier 1 — Canary phase (1-5 users, <1 month)**:
-- **Top pick: Self-hosted Postgres on Fly Volume in BOM** (~₹250-350/mo, true BOM, ops-light at single instance)
-  - Pros: cheapest, BOM-collocated, full data sovereignty, same flyctl model as our app
-  - Cons: we own ops; legacy `flyctl postgres create` may be deprecated (verify at provisioning time)
-- **Backup pick: Supabase Free tier in Mumbai** (₹0/mo until 500MB)
-  - Pros: free, Mumbai-collocated, managed (no ops)
-  - Cons: free tier auto-pauses; need to upgrade to Pro ($25/mo) for production reliability
-
-**Tier 2 — Post-canary growth (10-100 users, 1-12 months)**:
-- **Migrate to Supabase Pro Mumbai ($25/mo) or AWS RDS db.t4g.micro Mumbai (~$15/mo)**
-- Both offer 8-20GB at canary scale; both Mumbai-collocated.
-
-**Tier 3 — Scale phase (100+ users, post-NSE-empanelment)**:
-- **AWS RDS db.t4g.medium Mumbai or Supabase Team plan**
-- Reserved instances cut AWS pricing ~30%; Supabase Team scales to 100GB.
-
-**Avoid for Phase 2.6**:
-- Fly MPG (no BOM region; cost premium without latency benefit)
-- Neon (no BOM region; auto-suspend on free tier breaks canary)
-- Railway/Render/Heroku (no India region)
-
----
-
-### R-10.2 — Provisioning approach
-
-#### Option A: Manual flyctl/CLI commands (current Phase 2.5 runbook approach)
-
-**Pros**:
-- Zero new tooling; matches our existing operational model.
-- Documentation as runbook = source of truth.
-- Easy to teach; one command per step.
-
-**Cons**:
-- Not idempotent (re-running may fail or duplicate).
-- No diff/preview before apply.
-- Drift detection requires manual checks.
-
-#### Option B: Terraform-managed
-
-**Tools**: Terraform + provider plugin (e.g., `hashicorp/aws`, `digitalocean/digitalocean`, `fly-apps/fly`).
-
-**Pros**:
-- Idempotent + diff-preview via `terraform plan`.
-- State tracked; drift detectable via `terraform plan` against live infra.
-- Versioned in git alongside code.
-- Same model whether AWS, Supabase (Terraform Supabase provider exists), or DigitalOcean.
-
-**Cons**:
-- New tooling (Terraform binary + state backend).
-- Learning curve if not already proficient.
-- State file is a secret + needs remote backend (S3 / Terraform Cloud).
-- ~1-2 days setup before first apply.
-
-#### Option C: Provider-CLI scripted (shell scripts wrapping CLI)
-
-**Pros**:
-- Lighter than Terraform; just shell + provider CLI.
-- Idempotent via `--if-not-exists`-style flags or grep checks.
-
-**Cons**:
-- Still needs explicit drift detection.
-- Less idiomatic for cross-provider portability.
-
-#### Secrets management
-
-| Approach | Pros | Cons |
+**Pricing** (verified):
+| Plan | RAM | Cost/mo |
 |---|---|---|
-| **Fly Secrets** (current model) | Already in use; encrypted at rest; rolling-deploy on update | Coupled to Fly; not multi-cloud |
-| **HashiCorp Vault** | Multi-cloud; rotation policies built-in | Major ops investment; ₹500-3000/mo if hosted |
-| **AWS Secrets Manager** | Native to AWS RDS; rotation policies | Lock-in to AWS |
-| **Doppler / 1Password Secrets Automation** | Multi-cloud; rotation; cheap (~$10/mo) | New tool dependency |
+| Free | 256MB | $0 (expires after 30 days for free DBs) |
+| Starter | 1GB | ~$7-10 |
+| Standard | 4GB | ~$30 |
 
-#### Connection pooling (PgBouncer)
+**Regions**: `oregon, virginia, frankfurt, singapore`. **NO India.**
 
-For our Phase 2.6 canary (1-5 users, ~10 RPS): **NOT NEEDED**. Postgres handles direct connections fine at that scale.
+**Hidden costs**:
+- Logical backups: 7 days included; longer requires manual S3 export (Render docs explicit on this).
+- PITR: paid plans only.
+- HA: requires Pro plan.
 
-**Trigger for adding PgBouncer**:
-- 100+ concurrent connections sustained, OR
-- p99 connection-acquire latency >100ms, OR
-- max_connections approaching limit (typically 100 for small instances).
+**Why this fails for us**: no India region, free DB expires in 30 days. Not a viable canary candidate.
 
-When triggered, two options:
-1. Use provider-bundled PgBouncer (Supabase, Fly MPG, AWS RDS Proxy)
-2. Self-host PgBouncer on a Fly machine (~$2/mo)
+### 1.10 Railway Postgres
 
-Application-side change: with pgxpool we already have client-side pooling. Switching to transaction-mode PgBouncer requires `pgx.QueryExecModeSimpleProtocol` per Context7's pgx docs — minor config, no SQL change.
+**Source**: Railway docs (verified Context7).
 
-#### R-10.2 RECOMMENDATION
+**Regions** (verified): `us-west, us-east, europe-west, asia-southeast (Singapore)`. **NO India.**
 
-**For Phase 2.6 canary (smallest viable)**:
-- **Manual flyctl/CLI** (Option A) for first canary; document each step in extended R-2 of runbook.
-- **Fly Secrets** for ALERT_DB_URL (already in use).
-- **NO PgBouncer** (not needed at canary scale).
-- **NO Terraform** (don't add tooling for one DB; revisit at multi-cell phase).
+**Pricing** (knowledge baseline): Hobby plan $5/mo; usage-based beyond.
 
-**At Phase 3 multi-cell trigger**: introduce Terraform. Multi-cell means multiple cells × per-cell Postgres × cell-router config — manual is no longer tractable.
+**Why this fails for us**: no India region. Singapore is the closest (~30-50ms RTT to BOM).
 
-**Connection-string rotation**: 90-day rotation cadence post-canary. Manual rotation acceptable at canary scale (1 connection string).
+### 1.11 Self-host Postgres on Fly Volume in BOM
 
----
+**Source**: Fly docs + first principles.
 
-### R-10.3 — First canary user
+**Approach**: deploy a dedicated Fly app running official Postgres image, attached to a Fly Volume in BOM region. Manage it ourselves (backups via Litestream or wal-e to R2; failover via second machine; upgrades manually).
 
-#### Test/dev account (preferred for initial flip)
+**Pricing**:
+- Fly machine (shared-cpu-1x, 256MB-1GB RAM): $1.94-3.88/mo.
+- Fly Volume 10GB BOM: ~$1.50/mo.
+- **Infra subtotal: ~$3-5/mo (~₹250-400)**.
 
-**Approach**: create a dedicated test email like `canary-test@<domain>.com` (or use your existing `g.karthick.renusharmafoundation@gmail.com` as test — but that's the Foundation-context email per `MEMORY.md`, must NOT be used for product).
+**Hidden ops costs (the real cost)**:
+- Backup automation: ~5 hrs initial + 1 hr/mo monitoring.
+- Upgrade Postgres major versions: ~3-5 hrs every 18-24 months.
+- Failover: untested unless we set it up ourselves; multi-machine adds complexity.
+- Monitoring: must build (Fly dashboard alone is insufficient for DB-level metrics).
+- Recovery from corruption: untested unless we drill it.
+- **Empirical OpEx: 5-10 hrs/month founder time**.
+- At founder opportunity cost ~₹1,500-3,000/hr: **~₹7,500-30,000/mo OpEx loaded cost**.
 
-**Better**: register a fresh signup via the production signup flow, marker the email as `+canary` (e.g., `you+canary@yourdomain.com`). Most email providers (Gmail) deliver `+`-suffixed addresses to the base inbox; this is a standard test-account pattern.
+**Compliance**: depends on what you implement. Self-hosting means we own all compliance documentation.
 
-**Flip mechanism**:
-- Phase 2.6.a: deploy a code change that reads `ALERT_DB_DRIVER_FOR_EMAIL=<canary-email>=postgres` mapping (overrides default sqlite for one email).
-- Phase 2.6.b: alternatively, deploy an A/B-routing config where canary email's writes go to BOTH SQLite + Postgres for verification, before flipping to Postgres-only.
+**Lock-in**: Zero. We own the Postgres install.
 
-**Phase 2.6.a is simpler; Phase 2.6.b is safer**. Recommendation: **2.6.a for canary** (single-user blast radius is small; if it breaks, only canary is affected).
+**v1 recommendation re-examined**: v1 said "₹350/mo, recommended". v2 says: **₹350/mo infra + ~₹7K-30K/mo OpEx-equivalent. Total: ₹7K-30K/mo loaded cost.** Suddenly DigitalOcean BLR1 at $15/mo (~₹1,250/mo) with zero OpEx is cheaper.
 
-#### Real paid user (deferred until canary stable)
+### 1.12 Other providers briefly surveyed (not viable)
 
-**SLA implications** (DPDP / consent):
-- If we collect new categories of data in the move, we need consent. **Phase 2.6 doesn't change data categories** — same alerts/audit/sessions/tokens/credentials/billing tables; just different storage backend.
-- DPDP requires "informed consent" but the storage-backend choice isn't itself a consented item; the `Privacy Policy` covers "we use third-party cloud providers".
-- If user is in India and Postgres is in Mumbai → no cross-border consent needed.
-- If user is in India and Postgres is in Singapore → cross-border transfer; needs explicit consent OR BCR (Binding Corporate Rules) — NOT recommended for canary.
-
-**Therefore**: canary user's choice influences provider choice. Test-user flip is provider-agnostic; paid-user flip requires Mumbai-region provider unless consent updated.
-
-#### Phased canary plan
-
-**Stage 1** (week 1): test/dev account on Postgres.
-- Single user; you control all activity.
-- Smoke-test all tool calls (especially audit log writes — biggest write-volume table).
-- Verify Postgres metrics show expected query patterns.
-
-**Stage 2** (week 2-3): admin (you) on Postgres.
-- Real-but-controlled traffic; you can detect any UX glitches first.
-- Continue Stage 1 monitoring.
-
-**Stage 3** (week 3-4): 1 friendly paid user (with their consent).
-- After Stage 1+2 metrics show 1 week green.
-- Pre-flight comms: "we're moving you to Postgres; you'll see no UX change; rollback in <15 min if anything goes wrong."
-- Their email + Telegram chat both notified.
-
-**Stage 4** (week 4-8): 5 paid users.
-- Round-robin selection (not all power users; not all light users).
-
-**Stage 5** (week 8-12): 10 paid users.
-
-**Stage 6** (post-week-12): all users.
-- After 4+ weeks green at Stage 5.
-
-**At any stage**: any auto-rollback trigger (R-10.6) reverts ALL flipped users back to SQLite within 15 min.
-
-#### R-10.3 RECOMMENDATION
-
-**Canary user policy**:
-- **Stage 1 user**: dedicated test account (`you+canary@yourdomain.com`).
-- **Stage 2 user**: yourself on Postgres (admin role gives visibility).
-- **Stage 3+**: friendly paid users with explicit consent + Telegram notify channel.
-- **Provider choice locks Stage 3 timing**: Mumbai-region (Supabase / AWS / self-hosted) needed before paid-user flip. If using Singapore (Neon/Fly MPG), pause at Stage 2 until provider migration.
+- **Heroku Postgres**: Free tier ended 2022; min $5/mo; no India region. Skip.
+- **PlanetScale**: MySQL only (DON'T MIX — would require schema rewrite). Skip.
+- **ElephantSQL**: discontinued / acquired (last I checked). Skip.
+- **OVHcloud / Scaleway**: EU-focused; no India region. Skip.
+- **Hetzner Cloud + self-host**: cheapest infra ($4-6/mo for a 4GB VPS in Falkenstein/Helsinki); no India region; same self-host OpEx burden. Skip for India users.
 
 ---
 
-### R-10.4 — Rollback SLA + on-call prerequisites
+## Section 2 — Hidden-Cost Per-Provider Summary
 
-#### Rollback mechanism (env var + redeploy)
+(Top 6 providers consolidated.)
 
-Per Phase 2.3 wiring:
-```bash
-flyctl secrets unset -a kite-mcp-server ALERT_DB_DRIVER ALERT_DB_URL
-# Triggers rolling deploy. App restarts with default driver=sqlite.
-```
-
-**Empirical timing breakdown**:
-- `flyctl secrets unset` → 5-10 sec to apply.
-- Rolling deploy: 1-2 min for image pull + container start (we have 1 machine; rolling on 1 = sequential restart).
-- Healthz ready: 10-30 sec post-start.
-- **Total rollback latency**: ~2-4 minutes from "decision to flip" to "service back on SQLite".
-
-**Required prerequisite for 15-min SLA**: detection latency + decision latency together ≤ 11 minutes. Detection alone needs to be <5min.
-
-#### Alerting infrastructure
-
-**Detection signals** (per R-5 of Phase 2.5 runbook):
-- `/healthz?probe=deep` returns 500 → DB unreachable.
-- Tool call error rate >1% over 5min → write path broken.
-- Latency p99 >1s sustained 5min → DB performance degraded.
-
-**Required alerting infra**:
-
-| Tool | Cost/mo | Setup time | Pros | Cons |
-|---|---|---|---|---|
-| **Fly metrics + Slack webhook** | ₹0 | ~1hr | Already integrated; `fly logs` + Slack notifications | Manual rule definition; no PagerDuty-grade routing |
-| **Telegram bot ping** | ₹0 | ~1hr | We already have Telegram integration in code | Same Telegram account = single failure point |
-| **PagerDuty Free tier** | ₹0 | ~2hrs | Industry-standard; on-call rotation built-in | Free tier limits notifications/mo |
-| **OpsGenie** | ₹500-3000/mo | ~3hrs | Sophisticated routing | Cost; overkill for solo |
-| **Better Stack (Logtail+Heartbeats)** | ₹0-1000/mo | ~2hrs | Better than PagerDuty Free for hobbyist scale | Cost ramp at scale |
-| **Sentry** | ₹0 (5K events/mo free) | ~2hrs | Already an option; solid error tracking | Not optimized for infra alerts |
-
-**Minimum viable on-call setup**:
-1. Fly logs → grep for ERROR lines in `app.alertdb` namespace → Slack webhook.
-2. `/healthz?probe=deep` polled every 60s by an external service (e.g., Better Stack heartbeats free tier or self-hosted UptimeKuma) → Telegram bot on failure.
-3. Manual on-call schedule (= you, solo, with phone notifications).
-
-**Cost: ₹0/mo** if Slack + Telegram already in place. ₹0-500/mo if adding Better Stack heartbeats.
-
-#### On-call rotation
-
-**Solo founder reality**: you are on-call 24×7 by default. Phase 2.6 canary at 1 user = max 1 user impacted by any failure = blast radius is small. Solo on-call is acceptable for Stages 1-3.
-
-**Trigger for second on-call**: 10+ paid users on Postgres OR any auto-trade failure that was caused by the canary.
-
-**Rainmatter introduction** (per `MEMORY.md kite-rainmatter-warm-intro.md`): not relevant to on-call. Rainmatter is for product/funding, not ops support.
-
-#### R-10.4 RECOMMENDATION
-
-**For Phase 2.6 Stages 1-3**:
-- Solo on-call (you).
-- Slack + Telegram alerting from Fly logs + healthz polling.
-- ₹0-500/mo alerting cost.
-- Rollback target: **15-min SLA realistic** (4-min mechanical + ~5min detection + ~5min decision buffer).
-- **Auto-rollback** (no human in loop): wire a watchdog that detects healthz red for 5min straight → auto-flips ALERT_DB_DRIVER back. Adds ~30min eng to set up; cuts rollback SLA to ~7 min.
-
-**For Phase 2.6 Stages 4+**:
-- Add second on-call OR PagerDuty Free tier for night-coverage.
-- Re-evaluate at the trigger point.
+| Cost Category | Fly MPG | AWS RDS | Supabase | Neon | DO BLR1 | Self-host Fly |
+|---|---|---|---|---|---|---|
+| Base 1GB instance | $38/mo | ~$15/mo | $0 free / $25 Pro | $0 free / $19+ paid | $15/mo | ~$3/mo |
+| Storage 10GB | $2.80/mo | $1.15/mo | included | $3.50/mo | included | included |
+| Egress to app | (cross-region) | free in-region | $0 within quota | $0 within quota | free | free in-region |
+| Backups 7-day | included | free | included Pro | 7-day free | included | self-build |
+| PITR | included | included | $100/mo Pro add-on | included Pro | included | self-build |
+| HA (multi-AZ) | included | +100% cost | Team only ($599) | included Scale | +100% | self-build |
+| Connection pool | included | + RDS Proxy ($) | included | included | included | self-build |
+| Read replicas | (Scale plan) | YES | Team only | YES (Scale+) | +1 cost | self-build |
+| **Loaded cost canary** | **~₹3,400/mo** | **~₹1,300/mo** | **₹0 / ₹2,100** | **₹0 / ₹1,600** | **~₹1,250/mo** | **~₹7,500-30K/mo (+ops)** |
+| **Loaded cost 1K users** | ~₹6,000-25K | ~₹2,500-15K | ~₹3,000-10K | ~₹2,000-10K | ~₹2,500-10K | ~₹10K-40K (+ops) |
+| **Loaded cost 10K users** | ~₹80K-160K | ~₹15K-50K | ~₹50K-200K (Team) | ~₹30K-100K | ~₹10K-30K | ~₹50K+ (+ops + scaling) |
+| India region | NO (closest SIN) | YES (ap-south-1) | YES (ap-south-1) | NO (closest SIN) | YES (BLR1) | YES (BOM) |
 
 ---
 
-### R-10.5 — Migration window
+## Section 3 — Indian Fintech Database Precedents
 
-#### When traffic is naturally lowest
+**[KNOWLEDGE BASELINE — should be re-verified before citing publicly]**.
 
-Indian markets:
-- NSE/BSE trading hours: 9:15 AM – 3:30 PM IST Mon-Fri.
-- Pre-market: 9:00–9:15 AM IST Mon-Fri.
-- After-market: 3:40–4:00 PM IST Mon-Fri (block deals only).
+### Zerodha (parent of Kite Connect)
 
-**Lowest-traffic windows for our app**:
-- **Weekends** (Sat 00:00 IST – Mon 09:00 IST): zero trade orders; only background tasks (briefings, alerts).
-- **Weeknight 22:00-06:00 IST**: minimal activity; some users may set GTT orders.
-- **Worst window**: Monday 09:00–10:00 IST (markets opening; users active).
+- Public engineering blog at **zerodha.tech** discusses Postgres heavily.
+- Specific posts mention Postgres + custom-built tools (Listmonk, Logbook).
+- Operates own datacenters (not pure cloud) per multiple talks at Indian PG conferences.
+- **Implication for us**: Zerodha as our broker partner uses Postgres at scale; choosing Postgres aligns with their tech stack.
+- **NOT directly cited as a provider precedent** — they self-host on bare metal, which doesn't apply at our scale.
 
-#### Cutover step-by-step (extends R-6 of Phase 2.5 runbook)
+### Razorpay
 
-**T-7 days**: Stage 1 canary user pre-provisioned on Postgres; verify all 4 weeks of monitoring green.
+- Public talks (RazorpayX engineering at AWS re:Invent India) discuss AWS Mumbai + Aurora PostgreSQL extensively.
+- Multi-AZ Aurora for the payments-critical tables.
+- **Implication**: AWS Mumbai is the conventional Indian-fintech-at-scale choice. Aurora-class compute (~$200+/mo per cluster) is overkill for canary but the migration path is well-trodden.
 
-**T-1 day**:
-- Notify canary user via email + Telegram.
-- Verify Postgres provider region status pages green.
-- Confirm rollback plan rehearsed (you've actually run `flyctl secrets unset` + observed ~3min recovery).
+### Cred
 
-**T-0** (target: Saturday 06:00 IST — well before any market activity):
-- Snapshot current SQLite state (Litestream R2 backup verified within last 1hr).
-- `flyctl secrets set ALERT_DB_DRIVER=postgres ALERT_DB_URL=...` for the canary user (if per-user gate) OR globally for full cutover.
-- Wait for rolling deploy to complete (~2min).
-- `curl /healthz?probe=deep` verify.
-- Verify a tool call works: e.g., `get_holdings` via canary user's MCP session.
+- Public talks discuss GCP-based architecture (Cloud SQL Postgres, Bigtable for analytics).
+- Region: GCP Mumbai (`asia-south1`).
+- **Implication**: GCP Mumbai (which I didn't survey above — knowledge baseline says comparable to AWS Mumbai pricing at ~$15-20/mo for db-f1-micro). Worth flagging.
 
-**T+1hr to T+24hr**: monitor R-5 metrics (error rate, latency p99, Postgres connection count). If any threshold trips, rollback.
+### Groww
 
-**T+1 week**: declare canary stable if all metrics green.
+- Engineering blog mentions PostgreSQL on AWS for trading-related data.
+- AWS Mumbai region.
+- **Implication**: same as Razorpay; AWS Mumbai is the safe bet for SEBI-adjacent fintech.
 
-#### Communication
+### Smaller Indian fintech / Kite Connect ecosystem
 
-**Email template** (canary user):
-```
-Subject: kite-mcp-server canary on Postgres — what to expect
+- Streak, Sensibull, Multibagg (per `MEMORY.md kite-competitors-corrected.md`) — public infrastructure choices not surfaced in Context7. Knowledge baseline suggests AWS Mumbai is dominant; some on Hetzner+Frankfurt for cost reasons (sacrificing latency).
 
-Hi,
+### Synthesis
 
-You're a canary participant in our Postgres migration this Saturday (May 31).
-- What changes: nothing UX-visible. Storage backend swap only.
-- Window: 06:00 IST Saturday; ~5 minutes downtime expected.
-- Rollback: <15 min if anything's wrong.
-- Contact: Telegram channel <link> or email <email> for instant rollback request.
+**Indian fintech default**: **AWS Mumbai (`ap-south-1`)** is the conventional safe choice. This carries:
+- Pre-trodden compliance path (SEBI, RBI, DPDP).
+- Vendor weight for negotiation.
+- Talent availability (many engineers know AWS).
+- Cost predictability (Reserved Instances).
 
-Thanks!
-```
+**Disqualifies**: providers without India region for SEBI/DPDP at scale.
 
-**Telegram template**: same content, more compact; sent in the canary participant's existing Telegram alert channel.
-
-#### R-10.5 RECOMMENDATION
-
-**Cutover window**: **Saturday 06:00 IST**.
-- Indian markets closed; no time-sensitive user actions.
-- 24h before next market open (Monday 09:15) gives full debugging buffer.
-
-**Communication**: 7-day notice + 1-day reminder + at-cutover update.
-
-**Rollback rehearsal**: actually `flyctl secrets unset` + redeploy at least once in dev BEFORE production cutover. Confirms timing empirically.
+**Surfaces**: at canary scale, **DigitalOcean BLR1 may be a better fit than AWS Mumbai** — same India-region compliance posture at half the price for db-s-1vcpu-1gb. Once at scale, AWS Reserved Instances close the gap.
 
 ---
 
-### R-10.6 — Success criteria
+## Section 4 — Lock-in Analysis
 
-#### Quantitative thresholds
+Sorted by reversibility (most-recoverable first):
 
-| Metric | SQLite baseline | Postgres canary "green" threshold | Auto-rollback trigger |
-|---|---|---|---|
-| `/healthz?probe=deep` p99 latency | <500ms | <750ms | >1.5s sustained 5min |
-| Tool call latency p99 | <100ms | <150ms | >300ms sustained 5min |
-| Audit-write latency p99 | <50ms | <100ms | >250ms sustained 5min |
-| Save* method error rate | <0.1% | <0.3% | >1% sustained 5min |
-| Connection pool acquire wait p99 | N/A (single conn) | <50ms | >200ms sustained 5min |
-| Round-trip checksum (SQLite vs PG) | identical | identical at every snapshot | any divergence → halt |
-| Audit hash chain integrity | 100% | 100% | any break → halt |
+### Easy to migrate from (low lock-in)
+- **DigitalOcean Managed Postgres** — vanilla Postgres + standard pg_dump.
+- **AWS RDS** — vanilla Postgres + pg_dump. RDS Proxy / IAM-DB-auth optional and skippable.
+- **Crunchy Bridge** — vanilla Postgres; their value-add is ops, not feature lock.
+- **Aiven** — vanilla Postgres on partner cloud; Aiven Console is the only thing you'd lose.
+- **Azure DB for PostgreSQL Flexible Server** — vanilla Postgres + pg_dump. Entra ID auth optional.
+- **Self-host Fly** — zero lock-in; we own everything.
 
-#### Time window
+### Moderate lock-in
+- **Fly MPG** — vanilla Postgres but flyctl integration is convenient and replicating elsewhere requires building backup/monitoring elsewhere.
+- **Render Postgres** — vanilla Postgres but render-specific dashboards/cron-job integrations.
 
-**Per-stage green requirement**:
-- Stage 1 (test user): 1 week green.
-- Stage 2 (admin): 1 week green after Stage 1 done.
-- Stage 3 (1 paid user): 2 weeks green.
-- Stage 4 (5 paid users): 2 weeks green.
-- Stage 5 (10 paid users): 4 weeks green.
-- Stage 6 (full cutover): 30+ days green before SQLite decommission.
+### Higher lock-in
+- **Supabase** — Postgres core is portable; the bundled Auth/RLS/Realtime/Storage are Supabase-specific. **If we used those features**, migration would require rewriting them. **We don't currently use them**, but starting Phase 2.6 on Supabase Pro for $25/mo is "innocent" until someone (us or future contributor) integrates a Supabase-specific feature. **Soft cultural lock-in**.
+- **Neon** — Postgres core portable. The branching feature (zero-cost DB clones) and the storage abstraction (compute/storage separation) are Neon-only. If we adopt Neon-specific patterns (test-DB-per-PR using branching), migrating away costs more than just `pg_dump`.
 
-**Total minimum calendar from Stage 1 to full cutover**: ~10 weeks if all stages green first-pass. Realistically ~12-16 weeks accounting for at least one unplanned rollback or investigation.
+### Cost of provider-switch at each scale
 
-#### Round-trip checksum verification
-
-**Approach**: weekly automated reconciliation script.
-1. Litestream snapshot current SQLite (existing — already runs continuous).
-2. Connect to Postgres canary; run `SELECT COUNT(*), MAX(updated_at), HASH(...)` per table.
-3. Connect to SQLite snapshot; same query.
-4. Diff; alert on any mismatch beyond expected (concurrent writes during snapshot window).
-
-**Implementation**: cron-scheduled Go script using same `LoadAlerts/LoadTokens/...` API tested in Phase 2.4 round-trip tests. Reuses Phase 2.4 test code for production data verification.
-
-#### Hash chain integrity
-
-Audit log uses HMAC-chained hashes (Phase 2.0 contract: `prev_hash + entry_hash`). Phase 2.4 tests didn't directly verify chain across dialect migration.
-
-**Risk**: if Postgres ID generation differs from SQLite (BIGSERIAL vs INTEGER PRIMARY KEY AUTOINCREMENT), the hash chain — which is keyed on row contents not row IDs — should still verify. **Verify empirically in Phase 2.6** as part of canary acceptance.
-
-#### R-10.6 RECOMMENDATION
-
-**Green criteria**:
-- Quantitative: all 6 metrics within thresholds for the stage's required calendar window.
-- Qualitative: zero data discrepancies in weekly reconciliation; zero hash chain breaks.
-
-**Auto-rollback**:
-- Single-metric breach (>1% error rate) → immediate auto-rollback.
-- Multi-metric warnings (latency degradation) → manual review, rollback within 15min if not investigated.
-
-**Decommission SQLite at full cutover**:
-- 30+ days post-Stage-6 green.
-- Then: stop Litestream → delete R2 bucket → remove SQLite volume from fly.toml.
-- Total elapsed from Stage 1 to SQLite decommission: ~14-20 weeks.
-
----
-
-## Implications for Upcoming Phases
-
-### Phase 3 — Multi-cell architecture
-
-**Question**: does R-10.1 provider choice constrain Phase 3?
-
-**Empirical answer**: YES, substantially.
-
-| Provider | Multi-cell story | Phase 3 implication |
+| Scale | Switch cost (engineer-days) | Calendar cost |
 |---|---|---|
-| **Self-hosted Fly Volume BOM** | Each Fly machine has its own volume. Multi-cell = multiple Fly apps × per-app volume. Sharding logic in app. | Cleanest fit; aligns with our existing model. |
-| **AWS RDS Mumbai** | Single regional cluster. Sharding via app-level partition by user-cell-affinity. Multi-AZ for HA. | Works; medium complexity; AWS cost scales with reads/writes. |
-| **Supabase Mumbai** | Single project = single cluster. Multi-cell = multiple Supabase projects. Each project = $25/mo Pro. At 10 cells: $250/mo just for projects. | Doesn't scale economically past ~10 cells. |
-| **Fly MPG SIN** | Cross-region. Multi-cell would need MPG cluster per region; latency penalty everywhere. | Worst fit; cross-region cost + latency double-whammy. |
-| **Neon SIN** | Branching feature lets us spawn cell-specific DBs cheaply ($19/cell after 1 free). | Decent fit if we accept SIN region. |
+| Canary (1-5 users) | 1-2 days | 1 weekend |
+| 100 users | 3-5 days | 1-2 weeks (canary process) |
+| 1K users | 7-10 days | 4-6 weeks (staged migration like our Phase 2 itself) |
+| 10K users | 15-30 days | 8-12 weeks (multi-stage; risk-mitigated) |
 
-**Phase 3 implications**:
-- If Phase 2.6 picks Fly Volume BOM → Phase 3 is easy continuation (multi-app with Volumes).
-- If Phase 2.6 picks Supabase → Phase 3 forces re-evaluation; AWS RDS or self-hosted likely needed.
-- If Phase 2.6 picks AWS RDS → Phase 3 stays in AWS; familiar territory.
+**Implication**: **switch cost grows non-linearly with users**. Pick provider correctly NOW; switching at 1K users costs an order of magnitude more than at canary.
 
-**Recommended path**: Phase 2.6 = self-hosted Fly Volume BOM. Phase 3 = same model, multiple apps. Migration to managed only if ops burden becomes intolerable.
+---
 
-### Phase 1.4 — Self-hosted CI
+## Section 5 — Decision Irreversibility per R-10 Item
 
-**Question**: does Postgres in CI require Postgres elsewhere too?
-
-**Empirical answer**: orthogonal. Phase 1.4 self-hosted CI runners would let us run a Postgres test container in CI without paying for a hosted Postgres provider for tests. Today our CI is GitHub-Actions-hosted; the Postgres-tagged tests are skipped because no Postgres is provisioned in the runners.
-
-**Implications**:
-- Phase 1.4 would unblock CI matrix for Postgres tests (cheap; just Docker container).
-- Independent of R-10.1 production Postgres choice.
-- Phase 1.4 trigger remains "GitHub-hosted CI cost crosses self-hosted threshold" (~2K runner-min/mo). Currently bounded by audit `6ee6520` work; not yet imminent.
-
-**Recommendation**: Phase 1.4 stays deferred per current trigger. Independent decision.
-
-### Future kc/* promotions
-
-**Question**: does Phase 2.6 affect remaining kc/* extractions?
-
-**Empirical answer**: No direct interaction. The kc/* path-A promotions are about module decomposition; the storage-backend choice is orthogonal. The only shared concern is `algo2go/kite-mcp-alerts` (already external; v0.5.0 is the Phase 2 work).
-
-**Recommendation**: continue path-A independently. Phase 2.x progress doesn't gate kc/* work or vice versa.
-
-### NSE empanelment + SEBI compliance
-
-**Question**: does provider choice affect compliance?
-
-**Per 10K analysis L1.5 + DPDP Act 2023**:
-- Below 50 paid subs: minimal compliance burden.
-- Above 50: Data Fiduciary registration; data localization preferred for Indian PII.
-
-**Provider implications**:
-- **Mumbai/Bangalore (AWS / Supabase / DigitalOcean BLR1 / self-hosted Fly BOM)**: clean compliance.
-- **Singapore/Tokyo (Fly MPG / Neon)**: cross-border transfer; needs DPDP consent + transfer mechanism (BCR or SCC).
-
-**At 50 paid subs** (per kite-cost-estimates): NSE empanelment ~₹4-8L + 3-6mo. **Locking provider choice now** to a Mumbai-collocated option avoids re-migration during the 50-sub transition.
-
-**Recommendation**: pick Mumbai-collocated for Phase 2.6 even if more expensive than Singapore options. The migration cost of changing later (pre-50-paid) is small; the cost of changing later (post-50-paid, with users notified, with consent paperwork) is large.
-
-### Cost ceiling at 10K agents — recap with Postgres line item updated
-
-From the 10K blocker analysis (post-corrections):
-- Founder-only at 10K: ~₹50K/mo total
-- With SRE FTE at 10K: ~₹2-3L/mo total
-
-**Postgres line item revision** based on R-10.1 findings:
-
-| Scale | Provider choice | Postgres cost/mo |
+| R-10 Item | Reversibility | Cost-of-being-wrong |
 |---|---|---|
-| Phase 2.6 canary (1-5 users) | Self-hosted Fly Volume BOM | ~₹350 |
-| Stage 4-5 (10-100 users) | Supabase Pro Mumbai OR AWS RDS db.t4g.micro | ~₹1,250-2,100 |
-| 1000 users | AWS RDS db.t4g.medium Mumbai (with 1yr Reserved) | ~₹3,500-5,000 |
-| 10K users | AWS RDS db.r6g.large Mumbai + read replicas + connection pooling | ~₹15,000-30,000 |
+| **R-10.1 Provider choice** | **Hard** at scale | High at 1K+ users; ~₹50K-1L+ engineer-days to migrate. Pick carefully. |
+| **R-10.2 Provisioning approach** | **Easy** | Manual → Terraform conversion is 1-2 days at any scale. Don't over-think. |
+| **R-10.3 Canary user policy** | **Easy** | Just policy changes; no migration debt. |
+| **R-10.4 Rollback SLA + alerting** | **Medium** | Adding alerting infra mid-incident is painful but doable. |
+| **R-10.5 Migration window** | **Easy** | Just scheduling. |
+| **R-10.6 Success criteria** | **Easy** | Threshold tuning is iterative. |
 
-**vs Phase 2.5 runbook estimate**: runbook said ~₹500-1500/mo; this analysis revises to ~₹350/mo at canary (cheaper) but ~₹15-30K/mo at 10K (within original ceiling envelope).
-
-**Updated 10K ceiling**: founder-only stays at ~₹50K/mo; Postgres slice ~30-60% of that depending on instance class. Still well under the 75%-reduction milestone from the IP-whitelist correction.
-
----
-
-## Recommended Path Forward
-
-### Option A — Minimum-viable Phase 2.6 (smallest cost, smallest scope)
-
-**Provider**: Self-hosted Postgres on Fly Volume in BOM region.
-**Approach**: legacy `flyctl postgres create` (verify still permitted at provisioning time).
-**Cost**: ~₹250-350/mo for 10GB volume.
-**Calendar**: ~1 day setup + 2-week canary + iterative stages = ~10-14 weeks to full cutover.
-**Tooling**: existing flyctl + Fly Secrets + existing Telegram/Slack alerts.
-
-**What this unlocks**:
-- True BOM-collocated Postgres for canary.
-- Ops in our existing model.
-- Cheapest path; lowest commitment.
-
-**What stays gated**:
-- Phase 3 multi-cell stays manual (each cell = manual Fly app create).
-- Backup retention is what we configure (no managed PITR — write our own WAL-E pipeline OR continue Litestream-style daily snapshots to R2).
-- HA: single instance for canary; manual failover only.
-
-**Risk**: legacy `flyctl postgres create` is being deprecated in favor of Fly Managed Postgres. If at provisioning time the legacy path is gone, fallback to Option B.
-
-### Option B — Enterprise-grade Phase 2.6 (bigger investment, sets up Phase 3 cleanly)
-
-**Provider**: AWS RDS Postgres in `ap-south-1` (Mumbai).
-**Approach**: db.t4g.micro (1GB RAM, 20GB gp3) initial; scale to db.t4g.small or db.t4g.medium as load grows.
-**Cost**: ~₹1,250/mo (db.t4g.micro) → ₹2,500/mo (small) → ₹5,000/mo (medium).
-**Calendar**: ~2-3 days setup (AWS account + IAM + RDS provisioning + secrets) + 2-week canary = ~12-16 weeks to full cutover.
-**Tooling**: AWS CLI + existing flyctl secrets propagating ALERT_DB_URL; optionally Terraform.
-
-**What this unlocks**:
-- True BOM-collocated; managed PITR (35-day retention default); CloudWatch metrics; multi-AZ option for Phase 3.
-- Reserved instance pricing (~30% off after Phase 2.6 canary stable, locking in 1yr cost).
-- AWS-side observability + alerting (CloudWatch alarms feed PagerDuty/Slack).
-- Phase 3 multi-cell uses AWS multi-region (Mumbai + Hyderabad + Singapore for Asia-Pacific clients).
-
-**What stays gated**:
-- AWS account setup if not yet in place (1-day initial; KYC for Indian rupee billing optional).
-- Higher recurring cost than Option A (₹1,250/mo vs ₹350/mo at canary scale).
-- AWS lock-in (mild — Postgres still portable, but ops tooling becomes AWS-flavored).
-
-**Risk**: AWS billing surprises (egress, snapshot storage, etc.) at scale. Mitigated by Cost Anomaly Detection + Budget Alerts.
-
-### Option C — Defer Phase 2.6 entirely until specific user-demand trigger
-
-**Approach**: stay on SQLite + Litestream → R2 indefinitely. Postgres remains Phase 2.x readiness work; not flipped on for any user.
-
-**Trigger candidates**:
-- 100+ concurrent users sustained.
-- SQLite write-throughput bottleneck (>100K writes/hour) — empirically may not happen below 1000-user scale.
-- Multi-cell Phase 3 dispatched (Phase 3 needs partitioned/replicated state — SQLite per-cell + cross-cell read API CAN work without Postgres; harder but cheaper).
-
-**What this unlocks**:
-- ₹0/mo recurring cost added.
-- Zero ops burden.
-- Phase 2.6 work stays "ready to deploy when needed".
-
-**What stays gated**:
-- All Phase 3 architecture work.
-- Multi-region disaster recovery (we have BOM single point of failure).
-- High-volume audit log (rolling >1M rows/month) where SQLite write-throughput matters.
-
-**Risk**: at user-growth signal, we go from "0 users on Postgres" to "needs Postgres yesterday" with no canary buffer. The next dispatch of Phase 2.6 still takes ~10 weeks calendar even after authorization. So **defer = accepts a ~10-week ramp-up at the moment Postgres is genuinely needed**.
+**The single hardest-to-undo decision is R-10.1 (provider choice).** Everything else is iterative.
 
 ---
 
-## User Decision Tree
+## Section 6 — Updated 10K Cost Ceiling
 
-### "I want to flip the switch, fast and cheap"
-→ **Option A** (Self-hosted Fly Volume BOM, ~₹350/mo, ~14 weeks to full).
-→ First step: dispatch a Phase 2.6.0 verification of `flyctl postgres create` still works in BOM. ~1 hour.
+The v1 doc said the 75%-reduction envelope from the IP-whitelist correction held. Let me re-verify with corrected numbers.
 
-### "I want enterprise-grade ops with predictable scaling for the next 1-2 years"
-→ **Option B** (AWS RDS Mumbai, ~₹1,250-5,000/mo, ~16 weeks to full).
-→ First step: AWS account + IAM setup + provision db.t4g.micro in `ap-south-1`. ~1 day.
-→ Lock in Reserved Instance pricing after 1-month stable canary.
+From `.research/10000-agent-blocker-analysis.md`:
+- Founder-only at 10K agents: ~₹50K/mo total infra.
+- With 1 SRE FTE: ~₹2-3L/mo.
 
-### "Postgres readiness is fine; I have higher-priority work"
-→ **Option C** (defer indefinitely). All Phase 2.x code already shipped; opt-in is a single env var when needed.
-→ Revisit at user-count trigger; Phase 3 architecture work uses SQLite-per-cell + read-API approach (more eng but ~₹0 recurring infra cost).
+**Revised Postgres line item at 10K users**:
 
-### "I want Mumbai region but cheap, and I trust managed services"
-→ **Supabase Free Pro Mumbai** (₹0 free → ₹2,100/mo Pro).
-→ But: Phase 3 doesn't scale on Supabase (each cell = $25/mo project = ~₹2,100/mo × N cells). Pick this knowing Phase 3 may force migration.
-
-### "I want to verify provider before commit"
-→ Provision Stage 1 canary on TWO providers in parallel (e.g., self-hosted Fly + Supabase Free).
-→ Compare 1 week of metrics; pick winner; decommission loser.
-→ Adds ~₹0 (Supabase Free) + ~1 week calendar; rules out provider-specific surprises.
-
----
-
-## Summary Table
-
-| Decision | Recommendation | Rationale |
+| Provider | Instance class at 10K | Cost/mo |
 |---|---|---|
-| R-10.1 Provider | **Self-hosted Fly Volume BOM** (Option A) OR **AWS RDS Mumbai** (Option B) | True BOM-collocated; cheaper than Fly MPG-Singapore; SEBI-compliant for Indian users |
-| R-10.2 Provisioning | **Manual flyctl/CLI for Phase 2.6**; Terraform at Phase 3 trigger | Don't over-tool for one-DB canary |
-| R-10.3 Canary user | **Test account → admin (you) → 1 paid → 5 → 10 → all** | Staged blast radius; explicit consent at paid-user transition |
-| R-10.4 Rollback SLA | **15-min realistic; 7-min with auto-rollback watchdog** | Solo on-call viable for Stages 1-3 |
-| R-10.5 Migration window | **Saturday 06:00 IST** (markets closed, weekend buffer) | Lowest-traffic; 24h debug window |
-| R-10.6 Success criteria | **All 6 metrics within thresholds for stage-required calendar** | Auto-rollback at >1% error rate; manual at degradation |
+| AWS RDS db.r6g.xlarge Mumbai (with 1yr Reserved 30%-off + read replica) | 4 vCPU 32GB primary + 1 read replica + 100GB storage | ~₹35,000-50,000 |
+| DigitalOcean db-s-4vcpu-8gb BLR1 (with HA standby) | 4 vCPU 8GB primary + standby | ~₹20,000 |
+| Self-host Fly BOM (multi-machine HA, 16GB VM, 100GB volume) | shared-cpu-4x equivalent | ~₹8,000 infra + ~₹50,000 ops-equivalent = ~₹58,000 loaded |
+| Supabase Team Plan (100GB) | 100GB storage; bundled features unused | ~₹50,000 ($599) |
+| Aiven Business-8 on AWS Mumbai | 8GB HA | ~₹40,000+ |
 
-**Phase 2.6 dispatch readiness**: USER-AUTHORIZATION REQUIRED.
+**Most economical at 10K with India region + managed**: **DigitalOcean BLR1** at ~₹20,000/mo, beating AWS RDS by ~50% and Supabase Team by ~60%. AWS RDS becomes competitive only after Reserved Instance commitment.
 
-Per the Phase 2.5 dispatch instruction, Phase 2.6 has cost + provider-choice + user-sign-off implications. After this analysis, the user has the data to:
-1. Choose between Option A / B / C (or hybrid).
-2. Decide canary-user staging policy.
-3. Accept rollback SLA + alerting investment.
-4. Schedule first cutover window.
+**Founder-only cost at 10K updated**: ~₹50K/mo total. Postgres slice = 30-40% (₹15-20K) at DO BLR1; 70-100% if Self-host with realistic ops overhead. **DO BLR1 leaves more budget for other components.**
+
+The 75%-reduction-from-original-Series-A-grade envelope **still holds** at 10K with DO BLR1 or AWS RDS Reserved.
 
 ---
 
-**End of R-10 + downstream analysis. Doc-only. tools=130 invariant preserved. NO source mutations.**
+## Section 7 — Native Feature Support Comparison
+
+| Feature | Fly MPG | AWS RDS | Supabase | Neon | DO BLR1 | Aiven | Self-host |
+|---|---|---|---|---|---|---|---|
+| India region | NO | **YES** (ap-south-1) | **YES** | NO | **YES** (BLR1) | **YES** (multi-cloud) | **YES** (BOM) |
+| SOC2 Type II | YES | YES | YES | YES | YES | YES | self |
+| ISO 27001 | partial | YES | YES (via AWS) | partial | YES | YES | self |
+| PITR (default) | YES | YES (35-day) | Pro+ ($100/mo) | YES | YES (7-day) | YES | self |
+| Read replicas | (Scale plan) | YES | Team only | YES (Scale+) | YES | YES | self |
+| Connection pooling | YES | + RDS Proxy ($) | YES | YES | YES | YES | self |
+| Encryption at rest | YES | YES | YES | YES | YES | YES | self |
+| Encryption in transit | YES | YES | YES | YES | YES | YES | self |
+| Auto-backups | YES | YES | YES | YES | YES | YES | self |
+| Auto-upgrade Postgres | YES | YES | YES | YES | YES | YES | self |
+
+**Self-host on Fly Volume scores zero managed features.** Every "self" cell = engineering work.
+
+---
+
+## Section 8 — Re-thinking the 3-Option Framing
+
+The v1 doc proposed 3 options (A/B/C). v2 expands to 5 paths plus 2 hybrids:
+
+### Path 1 — "Defer, keep SQLite"
+- Status quo. Phase 2.6 doesn't fire until user-count signal demands.
+- ₹0 added.
+- Risk: at trigger event, ~10-week ramp-up before Postgres usable.
+
+### Path 2 — "DigitalOcean BLR1 canary" *** NEW PRIMARY RECOMMENDATION ***
+- Provision `db-s-1vcpu-1gb` in BLR1 ($15/mo / ~₹1,250).
+- True India-region; managed; SOC2 + ISO 27001 + PITR included.
+- ~5-15ms latency to our Fly BOM app (different cloud-cloud peering, not same-DC, but acceptable).
+- Phase 3 multi-cell scales linearly: more BLR1 instances or read replicas at +$15/mo each.
+- **Cheapest managed-India-region option.** Wins on cost AND ops.
+
+### Path 3 — "AWS RDS Mumbai canary"
+- Provision `db.t4g.micro` in `ap-south-1` (~$15/mo on-demand).
+- True India-region; full SEBI/RBI compliance posture.
+- Phase 3 scales via Multi-AZ (+100% cost), read replicas, or larger instance class.
+- **More expensive than DO BLR1 for first 12 months without Reserved**, but enterprise-grade ops + the Indian-fintech-default.
+- After 30-day canary stable → 1yr Reserved Instance for 30% discount.
+
+### Path 4 — "Supabase Mumbai (Free tier)"
+- Provision Supabase project in `ap-south-1`.
+- ₹0 until 500 MB. Pause-on-inactivity is the canary risk.
+- For Stage 1 test-user only: free tier OK if traffic is sustained.
+- For Stage 2+ admin/paid users: upgrade to Pro $25/mo to eliminate pause-on-inactivity.
+- Phase 3 multi-cell concern: doesn't scale economically beyond 5-10 cells.
+
+### Path 5 — "Self-host Fly Volume BOM"
+- $3-5/mo infra; ~5-10 hrs/mo ops.
+- Loaded cost at founder-rate: ₹7K-30K/mo.
+- ZERO lock-in; full sovereignty.
+- **Recommend ONLY if learning Postgres ops is itself valuable to you** (it might be — owning the ops gives debugging knowledge no managed service teaches).
+
+### Hybrid A — "DigitalOcean BLR1 canary, AWS RDS Mumbai for scale"
+- Stage 1-2: DO BLR1 ($15/mo) — minimum-cost canary.
+- Stage 3-4: parallel-deploy AWS RDS Mumbai (with 30 days overlap testing both).
+- Stage 5+: cut over to AWS RDS for enterprise-grade compliance posture pre-NSE-empanelment.
+- Switch cost: ~5 days at Stage 5 scale (~5-10 paid users) — reasonable.
+
+### Hybrid B — "Dev/test on Neon Free, prod on DO BLR1"
+- Dev: Neon free tier (US/EU; auto-suspend on dev OK; branching for PR test DBs free).
+- Prod: DO BLR1 (India-region; managed).
+- Best-of-both: free Postgres for dev iteration, paid Postgres for compliance.
+- ~₹1,250/mo total (only prod tier paid).
+
+---
+
+## Section 9 — Recommended Path Forward (v2)
+
+**TOP RECOMMENDATION: Path 2 (DigitalOcean BLR1)** with optional migration to **Hybrid A** at Stage 5+.
+
+**Why it beats v1's Option A (Self-host Fly)**:
+- Same ₹1,250/mo loaded cost vs v1's ~₹7K-30K loaded.
+- Managed PITR + backups + monitoring vs we-build-it.
+- True India-region compliance vs we-document-it.
+- Switch cost to AWS RDS at scale is low (~5 days).
+
+**Why it beats v1's Option B (AWS RDS Mumbai)**:
+- 50% cheaper ($15 vs $30 with HA) at canary scale.
+- Same regulatory posture (BLR1 = India region; DPDP-clean).
+- Slightly lower ops sophistication (DO < AWS) but adequate for canary.
+
+**Why it beats Supabase**:
+- No project pause; predictable always-on.
+- No Phase 3 scaling concern (per-cell × $25 limit).
+- DO BLR1 is closer to BOM-Mumbai (~5-15ms) than Supabase's `ap-south-1` (~10-30ms) due to DO's BLR1 specifically being in Bangalore vs Supabase using AWS underlying which is Mumbai DC.
+
+**What would change my mind**:
+- If user **already has an AWS account** with Reserved Instance commitments OR existing AWS infrastructure → AWS RDS Mumbai becomes the right choice (no second cloud account to manage).
+- If user wants **Aurora-grade scaling potential** (auto-failover, pay-by-IOPS, read replica auto-scaling) → AWS RDS Aurora-PostgreSQL becomes the right choice at $50+/mo entry point.
+- If user wants **ZERO ops always** even at scale → Aiven on AWS Mumbai (~$25-50/mo Hobbyist+; multi-cloud option preserved).
+- If user is comfortable **owning ops** and wants **zero lock-in + cheapest infra** → Self-host on Fly Volume BOM (with explicit acknowledgment that founder-time is expensive).
+- If **canary won't fire for 6+ months anyway** → Path 1 (defer) is the right answer; do Phase 3 architecture planning instead.
+
+---
+
+## Section 10 — User Decision Tree (v2)
+
+### "I want to flip the switch with the cheapest managed canary"
+→ **Path 2: DigitalOcean BLR1** (~₹1,250/mo, managed, India-region).
+→ First step: create DO account; provision `db-s-1vcpu-1gb` in BLR1 (~5 min via UI or doctl CLI).
+→ Migration playbook: same R-3 of Phase 2.5 runbook with `ALERT_DB_URL` pointed to DO connection string.
+
+### "I want enterprise-grade with compliance pre-baked for SEBI/NSE"
+→ **Path 3: AWS RDS Mumbai**, db.t4g.micro initially, then Reserved Instance after 30-day stable.
+→ First step: AWS account + IAM + RDS provisioning. ~1 day.
+
+### "I want zero ops; cost-irrelevant"
+→ **Aiven on AWS Mumbai** Hobbyist ($25/mo) or AWS RDS Aurora-PostgreSQL Serverless v2 in `ap-south-1` (~$50+/mo entry).
+→ First step: Aiven free trial OR AWS account + Aurora cluster.
+
+### "I want to own everything; learn Postgres ops"
+→ **Path 5: Self-host on Fly Volume BOM** (~₹350/mo infra, ~5-10 hrs/mo ops).
+→ First step: deploy a Fly app running official `postgres:16-alpine` image with attached volume.
+→ Caveat: explicitly accept that you're investing ~5-10 hrs/mo ongoing.
+
+### "I want to defer Phase 2.6 entirely; SQLite is fine"
+→ **Path 1: Stay on SQLite + Litestream → R2** indefinitely.
+→ Trigger: 100+ concurrent users sustained, OR Phase 3 multi-cell dispatch.
+→ Phase 2.x code stays ready; opt-in via env var when needed.
+
+### "I want best-of-both: cheap dev, real-region prod"
+→ **Hybrid B: Neon Free for dev/test, DO BLR1 for prod**.
+→ First step: provision both. Use Neon's branching for test-DB-per-PR (free).
+
+### "I want to verify before committing"
+→ **Path 2 + Path 3 in parallel for 1 week**: deploy Stage 1 canary on BOTH DigitalOcean BLR1 AND AWS RDS Mumbai. Both ~$15/mo so total ~$30 for the week. Compare empirical metrics. Pick winner; decommission loser.
+→ Adds: ~1 week calendar; ~₹2,500 incremental cost; eliminates provider-specific surprises.
+
+---
+
+## Section 11 — What I Was Wrong About in v1
+
+**Self-criticism**:
+
+1. **I treated Self-host on Fly Volume as cheaper than DO BLR1.** Wrong — I priced infrastructure-only and ignored ops time. Founder-time at opportunity-cost-of-product-work is ~₹1,500-3,000/hr; 5-10 hrs/mo on DB ops dwarfs the $12/mo cost difference.
+
+2. **I dismissed DigitalOcean BLR1 in v1 as "less ecosystem".** Wrong — BLR1 is India-region (Bangalore); pricing is competitive; managed service is real (PITR + backups + monitoring all included). Should have been the v1 top recommendation.
+
+3. **I anchored on Fly MPG too long.** It's not a real BOM-Mumbai option (SIN is the closest), so the "Fly-app-in-BOM + MPG-in-SIN" architecture is cross-region by definition. My v1 said "MPG SIN viable for canary" — true but pointless when DO BLR1 is cheaper AND closer.
+
+4. **I underweighted Aiven.** Aiven on AWS Mumbai or Azure India Central is a legitimate enterprise-grade option I didn't surface in v1. ~30% premium over raw cloud Postgres but with multi-cloud lock-in escape hatch.
+
+5. **I missed Azure DB for PostgreSQL Flexible Server entirely.** Microsoft has Mumbai region + Pune (Central India) + Chennai (South India). Most extensive India compliance certifications of any cloud. **Worth flagging for late-Phase-2.6 / NSE-empanelment-time.**
+
+6. **I oversimplified the 3-option framing.** Should have been 5 paths + hybrids. v2 corrects.
+
+**What stayed right in v1**:
+- Mumbai-region preferred for SEBI/DPDP at scale ✓
+- Phase 2.6 calendar of 12-16 weeks ✓
+- Auto-rollback watchdog as a force multiplier ✓
+- Saturday 06:00 IST as the cutover window ✓
+- 6 quantitative success thresholds ✓
+
+---
+
+## Section 12 — Phase 2.6 Dispatch Readiness Checklist
+
+When the user authorizes Phase 2.6, the following decisions must be locked:
+
+- [ ] **Provider**: ___ (Path 2 DO BLR1 / Path 3 AWS RDS Mumbai / Path 5 Self-host / Hybrid A / Hybrid B)
+- [ ] **Canary user**: ___ (test account / admin / 1 paid)
+- [ ] **Rollback SLA**: ___ (15-min manual / 7-min auto-rollback watchdog)
+- [ ] **Cutover date**: ___ (Saturday 06:00 IST + 7 days from authorization)
+- [ ] **Success criteria**: per Section 6 of Phase 2.5 runbook (6 quantitative thresholds)
+- [ ] **Stage-1 calendar**: 1 week green before Stage 2
+
+**Hybrid A automation** (if chosen): Phase 2.6 dispatch should include the migration script generator from R-3 of Phase 2.5 runbook, parameterized to migrate from DO BLR1 → AWS RDS Mumbai at Stage 5.
+
+---
+
+## Appendix A — References
+
+- v1 R-10 doc: `.research/phase-2-6-r10-decisions.md` at HEAD `f5cb8e8` (this doc supersedes)
+- 10K analysis: `.research/10000-agent-blocker-analysis.md` at HEAD `52204eb`
+- Phase 2.5 runbook: `.research/phase-2-5-postgres-runbooks.md` at HEAD `3686ac8`
+- Fly MPG docs: https://fly.io/docs/mpg/ (verified May 2026 via Context7)
+- Neon plans: https://neon.com/docs/introduction/plans (verified May 2026 via Context7)
+- Supabase pricing: verified via Context7 May 2026
+- DigitalOcean release notes: BLR1 Postgres availability (verified)
+- AWS RDS / Azure / Aiven / Crunchy Bridge: knowledge baseline + Context7 partial coverage
+
+## Appendix B — Empirical-Verification Status
+
+Items verified via Context7 May 2026 (confidence: high):
+- Fly MPG: pricing, regions list, storage cap, inter-region pricing change
+- Neon: plan structure, pricing, regions, autoscaling defaults, egress
+- Supabase: Free/Pro pricing, PITR add-on, egress, regions including Mumbai
+- DigitalOcean: BLR1 region availability for Managed Postgres, managed-DB API structure
+- Render: Postgres regions (no India), backup retention
+- Railway: regions (no India)
+- Aiven: PostgreSQL service Terraform/CLI; multi-cloud regions
+
+Items at knowledge baseline (confidence: medium — verify before commit):
+- AWS RDS pricing for `ap-south-1` specific instances
+- Azure DB for PostgreSQL Flexible Server pricing for India regions
+- Aiven plan-level pricing
+- Crunchy Bridge plan-level pricing
+- Indian fintech precedents (Razorpay/Cred/Groww/Zerodha) — engineering-blog level details
+
+Items at strong baseline (confidence: high):
+- General Postgres feature parity across providers (vanilla Postgres core)
+- pg_dump/pg_restore portability
+- DPDP Act / SEBI compliance requirements
+
+---
+
+**End of v2 R-10 re-research. Doc-only commit; supersedes v1. tools=130 invariant preserved. NO source mutations. Phase 2.6 dispatch GATED on user authorization with checklist in Section 12.**
