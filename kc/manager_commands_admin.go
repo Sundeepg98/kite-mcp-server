@@ -142,67 +142,101 @@ func (m *Manager) registerAdminUserCommands() error {
 
 // --- Admin: risk guard (freeze/unfreeze user + global) ---------------------
 
-func (m *Manager) registerAdminRiskCommands() error {
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminFreezeUserCommand](), func(ctx context.Context, msg any) (any, error) {
+// AdminRiskRegistrarDeps holds the dependencies for risk-guard admin
+// command handlers (freeze/unfreeze user + global; 4 commands). Single
+// dep — RiskGuardGetter — because every handler in this group requires
+// the guard and errors out cleanly if it's nil.
+type AdminRiskRegistrarDeps struct {
+	RiskGuardGetter func() *riskguard.Guard // required at command-dispatch time
+}
+
+// registerAdminRiskCommandsOnBus is the package-level pure-function
+// registrar for risk-guard admin commands.
+func registerAdminRiskCommandsOnBus(
+	bus *cqrs.InMemoryBus,
+	deps AdminRiskRegistrarDeps,
+	logger *slog.Logger,
+) error {
+	if err := bus.Register(reflect.TypeFor[cqrs.AdminFreezeUserCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminFreezeUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		guard := m.RiskGuard()
+		if deps.RiskGuardGetter == nil {
+			return nil, fmt.Errorf("cqrs: risk guard not configured")
+		}
+		guard := deps.RiskGuardGetter()
 		if guard == nil {
 			return nil, fmt.Errorf("cqrs: risk guard not configured")
 		}
-		uc := usecases.NewAdminFreezeUserUseCase(guard, m.Logger)
+		uc := usecases.NewAdminFreezeUserUseCase(guard, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminUnfreezeUserCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.AdminUnfreezeUserCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminUnfreezeUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		guard := m.RiskGuard()
+		if deps.RiskGuardGetter == nil {
+			return nil, fmt.Errorf("cqrs: risk guard not configured")
+		}
+		guard := deps.RiskGuardGetter()
 		if guard == nil {
 			return nil, fmt.Errorf("cqrs: risk guard not configured")
 		}
-		uc := usecases.NewAdminUnfreezeUserUseCase(guard, m.Logger)
+		uc := usecases.NewAdminUnfreezeUserUseCase(guard, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminFreezeGlobalCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.AdminFreezeGlobalCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminFreezeGlobalCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		guard := m.RiskGuard()
+		if deps.RiskGuardGetter == nil {
+			return nil, fmt.Errorf("cqrs: risk guard not configured")
+		}
+		guard := deps.RiskGuardGetter()
 		if guard == nil {
 			return nil, fmt.Errorf("cqrs: risk guard not configured")
 		}
-		uc := usecases.NewAdminFreezeGlobalUseCase(guard, m.Logger)
+		uc := usecases.NewAdminFreezeGlobalUseCase(guard, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminUnfreezeGlobalCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.AdminUnfreezeGlobalCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminUnfreezeGlobalCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		guard := m.RiskGuard()
+		if deps.RiskGuardGetter == nil {
+			return nil, fmt.Errorf("cqrs: risk guard not configured")
+		}
+		guard := deps.RiskGuardGetter()
 		if guard == nil {
 			return nil, fmt.Errorf("cqrs: risk guard not configured")
 		}
-		uc := usecases.NewAdminUnfreezeGlobalUseCase(guard, m.Logger)
+		uc := usecases.NewAdminUnfreezeGlobalUseCase(guard, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 	return nil
+}
+
+// registerAdminRiskCommands delegates to the package-level pure-function
+// registrar (Tier 2.3 slice 2/6).
+func (m *Manager) registerAdminRiskCommands() error {
+	return registerAdminRiskCommandsOnBus(m.commandBus, AdminRiskRegistrarDeps{
+		RiskGuardGetter: m.RiskGuard,
+	}, m.Logger)
 }
 
 // --- Alerts: create / delete / setup telegram -----------------------------
