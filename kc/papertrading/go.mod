@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/papertrading
+module github.com/algo2go/kite-mcp-papertrading
 
 go 1.25.0
 

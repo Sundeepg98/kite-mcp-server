@@ -15,7 +15,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	logport "github.com/algo2go/kite-mcp-logger"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/algo2go/kite-mcp-papertrading"
 )
 
 // --- Helpers (unique names to avoid collisions) ---

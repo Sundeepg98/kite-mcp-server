@@ -17,7 +17,7 @@ import (
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/algo2go/kite-mcp-eventsourcing"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/algo2go/kite-mcp-papertrading"
 	"github.com/algo2go/kite-mcp-riskguard"
 	"github.com/algo2go/kite-mcp-usecases"
 	"github.com/algo2go/kite-mcp-users"

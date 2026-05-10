@@ -21,7 +21,7 @@ import (
 	"github.com/algo2go/kite-mcp-eventsourcing"
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/algo2go/kite-mcp-papertrading"
 	"github.com/algo2go/kite-mcp-riskguard"
 	"github.com/algo2go/kite-mcp-scheduler"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"

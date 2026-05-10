@@ -14,7 +14,7 @@ import (
 	"github.com/algo2go/kite-mcp-audit"
 	"github.com/algo2go/kite-mcp-billing"
 	"github.com/algo2go/kite-mcp-instruments"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/algo2go/kite-mcp-papertrading"
 	"github.com/algo2go/kite-mcp-registry"
 	"github.com/algo2go/kite-mcp-ticker"
 	"github.com/algo2go/kite-mcp-users"

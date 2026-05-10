@@ -18,7 +18,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/algo2go/kite-mcp-papertrading"
 	"github.com/algo2go/kite-mcp-oauth"
 )
 
