@@ -20,14 +20,12 @@ COPY kc/aop/go.mod kc/aop/go.sum* kc/aop/
 COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/
 COPY kc/registry/go.mod kc/registry/go.sum* kc/registry/
 COPY kc/riskguard/go.mod kc/riskguard/go.sum* kc/riskguard/
-COPY kc/scheduler/go.mod kc/scheduler/go.sum* kc/scheduler/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
 COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
 COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
 COPY kc/domain/go.mod kc/domain/go.sum* kc/domain/
 COPY kc/eventsourcing/go.mod kc/eventsourcing/go.sum* kc/eventsourcing/
 COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
-COPY kc/isttz/go.mod kc/isttz/go.sum* kc/isttz/
 COPY kc/logger/go.mod kc/logger/go.sum* kc/logger/
 COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY kc/templates/go.mod kc/templates/go.sum* kc/templates/

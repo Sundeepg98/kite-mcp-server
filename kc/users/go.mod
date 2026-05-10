@@ -47,6 +47,5 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 )

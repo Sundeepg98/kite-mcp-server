@@ -6,8 +6,10 @@ require (
 	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/algo2go/kite-mcp-decorators v0.1.0
 	github.com/algo2go/kite-mcp-i18n v0.1.0
+	github.com/algo2go/kite-mcp-isttz v0.1.0
 	github.com/algo2go/kite-mcp-legaldocs v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0
+	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0
@@ -25,12 +27,10 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/instruments v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-isttz v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/registry v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/sectors v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000
@@ -60,13 +60,17 @@ require (
 // module (Fx provider/recipe composition root for the DI graph).
 // Path A inauguration extracted broker (commit 6626812), kc/money
 // (commit b92173b), kc/decorators (commit 7f71ccf), kc/i18n (commit
-// c25e37f), and kc/legaldocs (commit 568895e) to algo2go GitHub
-// repos. Phase B canary deletions (broker+money @ commit bef0b31,
-// decorators @ commit c19bca9, i18n @ commit 84aab63, legaldocs @
-// this commit) drop their replace directives — all five are now
-// fetched from algo2go/kite-mcp-broker@v0.1.0 +
-// algo2go/kite-mcp-money@v0.1.0 + algo2go/kite-mcp-decorators@v0.1.0
-// + algo2go/kite-mcp-i18n@v0.1.0 + algo2go/kite-mcp-legaldocs@v0.1.0
+// c25e37f), kc/legaldocs (commit 568895e), kc/isttz (commit bbb31da
+// — Path A.6.1 foundation), and kc/scheduler (commit b2315cd —
+// Path A.6.2 dependent) to algo2go GitHub repos. Phase B canary
+// deletions (broker+money @ commit bef0b31, decorators @ commit
+// c19bca9, i18n @ commit 84aab63, legaldocs @ commit 326c045,
+// isttz+scheduler @ this commit — combined dual delete) drop their
+// replace directives — all seven are now fetched from
+// algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
+// algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0 +
+// algo2go/kite-mcp-legaldocs@v0.1.0 + algo2go/kite-mcp-isttz@v0.1.0 +
+// algo2go/kite-mcp-scheduler@v0.1.0
 // via GOPROXY. The require lines at the top of this go.mod are the
 // operative source for those modules.
 replace (
@@ -79,12 +83,10 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/domain => ./kc/domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ./kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/instruments => ./kc/instruments
-	github.com/algo2go/kite-mcp-isttz => ./kc/isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ./kc/logger
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ./kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/registry => ./kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
-	github.com/algo2go/kite-mcp-scheduler => ./kc/scheduler
 	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/templates => ./kc/templates

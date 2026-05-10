@@ -24,4 +24,3 @@ require (
 
 require github.com/stretchr/testify v1.10.0 // indirect
 
-replace github.com/algo2go/kite-mcp-isttz => ../isttz

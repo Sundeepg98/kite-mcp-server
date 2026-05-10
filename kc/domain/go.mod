@@ -55,5 +55,4 @@ require (
 )
 
 replace (
-	github.com/algo2go/kite-mcp-isttz => ../isttz
 )
