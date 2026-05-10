@@ -79,7 +79,7 @@ New to this? Start with paper trading: *"Enable paper trading mode"* — virtual
 - **Backtesting** — 4 built-in strategies (SMA crossover, RSI reversal, breakout, mean reversion) with Sharpe ratio and max drawdown
 - **Alerts** — price above/below, percentage drop/rise, composite conditions, volume spike, Telegram delivery + native Kite GTT alerts
 - **Paper trading** — virtual Rs 1 crore portfolio, simulated orders, background LIMIT fill monitor, toggle on/off
-- **RiskGuard** — 9 safety checks run before every order hits the exchange
+- **RiskGuard** — 11 pre-trade checks run before every order hits the exchange (kill switch, order value cap, quantity limit, daily count, rate limit, per-second rate limit, duplicate detection, daily notional cap, idempotency dedup, anomaly μ+3σ, off-hours block) — plus circuit breaker + global freeze layers
 - **MCP Apps widgets** — inline portfolio / orders / alerts / activity UI on claude.ai, Claude Desktop, and ChatGPT
 - **Telegram bot** — `/buy`, `/sell`, `/quick`, `/setalert` with inline keyboard confirmation; morning briefing (9 AM IST) and daily P&L (3:35 PM IST)
 - **Order placement** — place, modify, cancel, GTT, convert positions, close-all (local build only; hosted deployment is read-only)
@@ -195,10 +195,10 @@ Once logged in via MCP OAuth, the dashboard cookie is set automatically (no seco
 
 | Feature | This server | [Official Kite MCP](https://mcp.kite.trade) | Streak |
 |---------|:-----------:|:-------------------------------------------:|:------:|
-| Tools | 117 | 22 | N/A |
+| Tools | 111 | 22 | N/A |
 | Order placement | Yes (local) | GTT only | Yes |
 | Paper trading | Yes | No | No |
-| Safety checks | 9 | 0 | 0 |
+| Safety checks | 11 | 0 | 0 |
 | Backtesting | 4 strategies | No | Yes |
 | Options Greeks | Yes | No | No |
 | Telegram alerts | Yes | No | No |
