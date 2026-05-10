@@ -1,0 +1,199 @@
+# Claude Code Team Configuration — kite-mcp-server
+#
+# Per user_team_agents_default.md: setting up team config at session start
+# (not mid-flight) when 3+ agents will work on a shared codebase. Reduces
+# concurrent-edit friction observed when ad-hoc Agent() + SendMessage was
+# used at scale (delete/revert/WIP-breaks-build incidents in prior sessions).
+#
+# Per user_team_commit_protocol.md: the SHARED-tree commit protocol is
+#   git commit -o -- <paths>          (NEVER `git add -A`)
+#   plain merge / fast-forward only   (NEVER `git pull --rebase`)
+# For per-teammate isolation see scripts/agent-worktree-init.sh.
+#
+# Per user_agent_domain_map_rule.md: the orchestrator MUST maintain a live
+# agent→domain map and route follow-ups by domain match, not by idleness.
+# The agent-domain map authoritative copy is at:
+#   .research/agent-domain-map.md
+# This config is the operational complement (named slots, modes, perms).
+#
+# Per feedback_no_stash_anywhere.md: `git stash` is forbidden across ALL
+# clones (source-of-truth + WSL2 verification mirror + per-agent
+# worktrees). Use scoped commits + worktrees for isolation.
+#
+# Per feedback_wsl_for_go_test.md: `go test` and `go build` MUST run in
+# WSL2 (Windows-native is SAC-flaky 50-70%). Each agent inherits this rule.
+#
+# Per user_agents_push_after_wsl_green.md: every brief that commits MUST
+# add a `git push` step gated on WSL2 green. Prevents unpushed-commits
+# backlog and stale-clone friction.
+
+version: 1
+team_name: kite-mcp-shared
+
+# Hard rules carried by all agents
+rules:
+  - "WSL2 mandatory for `go test` and `go build`"
+  - "git commit -o -- <paths> per PR; never `git add -A`"
+  - "Push to origin/master per commit when WSL2 green"
+  - "No git stash, no rebase, no --no-verify"
+  - "tools=130 invariant; refactor work shouldn't change tool count"
+  - "Don't deploy yourself; chain agent owns deploys"
+  - "Disjoint scope per agent; check agent-domain-map.md before dispatch"
+
+# Named agent slots. UUIDs assigned at session start; logged in
+# .research/agent-domain-map.md alongside the canonical domain.
+agents:
+  chain:
+    role: deploy-chain
+    domain: |
+      Owns deploys (flyctl deploy → version increment → smoke test →
+      rollback). Edits fly.toml, scripts/deploy.sh, scripts/smoke-test.sh,
+      Dockerfile (deploy-axis only).
+    default_mode: execute
+    permissions:
+      - "Bash(flyctl deploy:*)"
+      - "Bash(flyctl status:*)"
+      - "Bash(flyctl logs:*)"
+      - "Bash(flyctl machines:*)"
+      - "Bash(./scripts/smoke-test.sh:*)"
+      - "Read"
+      - "Edit"
+      - "Write"
+    forbidden_paths:
+      - "kc/**/*.go"
+      - "mcp/**/*.go"
+      - "broker/**/*.go"
+      - ".research/**"
+    notes: |
+      MUST NOT touch business logic. Owns deploy axis exclusively.
+      Smoke-tests after every deploy; rolls back on red.
+
+  audit:
+    role: feature-tdd
+    domain: |
+      Owns feature increments under TDD discipline (Axis C: audit-log
+      search, scanner, payoff-viz, etc.). Edits mcp/, kc/usecases/,
+      kc/audit/, kc/templates/. Adds tests FIRST per CLAUDE.md TDD policy.
+    default_mode: execute
+    permissions:
+      - "Read"
+      - "Edit"
+      - "Write"
+      - "Bash(go *:*)"
+      - "Bash(wsl *:*)"
+      - "Bash(git *:*)"
+    forbidden_paths:
+      - "fly.toml"
+      - "Dockerfile"
+      - "go.work"
+      - "go.mod"
+    notes: |
+      Push only after WSL2 green. Coordinate with path-a-owner on shared
+      modules (broker, kc/money, kc/decorators are external; check
+      go.work before editing in-tree paths near the boundary).
+
+  path-a-owner:
+    role: module-promotion
+    domain: |
+      Owns Path A workflow: promote in-tree modules to algo2go GitHub org.
+      Touches go.work + go.mod + Dockerfile during cutover. Phase B canary
+      deletion. Repository creation on github.com/algo2go.
+    default_mode: execute
+    permissions:
+      - "Read"
+      - "Edit"
+      - "Write"
+      - "Bash(git *:*)"
+      - "Bash(gh *:*)"
+      - "Bash(go *:*)"
+      - "Bash(wsl *:*)"
+    exclusive_paths:
+      - "go.work"
+      - "go.mod"
+      - "Dockerfile"
+    notes: |
+      Has EXCLUSIVE write on go.work + go.mod + Dockerfile during a
+      promotion. Other agents must avoid these files until Path A's
+      promotion lands. Coordination via SendMessage or this team config.
+
+  playwright:
+    role: visual-verification
+    domain: |
+      Owns visual verification: dashboard rendering, widget UX, OAuth
+      flow screenshots, kite.zerodha.com login flow recordings. Touches
+      kc/templates/*.html and tests/playwright/.
+    default_mode: execute
+    permissions:
+      - "Read"
+      - "Edit"
+      - "Write"
+      - "Bash(npx playwright:*)"
+      - "Bash(node:*)"
+      - "Bash(git *:*)"
+    forbidden_paths:
+      - "fly.toml"
+      - "Dockerfile"
+      - "go.work"
+      - "go.mod"
+      - "broker/**"
+    notes: |
+      Per CLAUDE.md project rule: use Chrome / Playwright for visual
+      operations; gh CLI for data ops. Stays out of Go code unless the
+      visual-test fixture requires Go-level mock changes.
+
+  capacity-architect:
+    role: research-doc
+    domain: |
+      Owns research / capacity-planning / architectural-blocker docs.
+      Writes to .research/ ONLY. Never mutates code. Doc-only commits.
+    default_mode: execute
+    permissions:
+      - "Read"
+      - "Edit"
+      - "Write"
+      - "Bash(grep *:*)"
+      - "Bash(git *:*)"
+    exclusive_paths:
+      - ".research/**"
+    forbidden_paths:
+      - "**/*.go"
+      - "go.work"
+      - "go.mod"
+      - "fly.toml"
+      - "Dockerfile"
+      - "scripts/**"
+    notes: |
+      THIS IS A NON-CODE-MUTATING AGENT. Verifies tool count via
+      `grep -rE 'mcp\.NewTool\("' mcp/ | wc -l` before and after each
+      research commit (must be unchanged — it's a doc-only invariant).
+
+# Cross-agent coordination protocols
+coordination:
+  shared_tree:
+    commit: "git commit -o -- <paths>"
+    pull: "git pull --ff-only"
+    push: "git push origin master (after WSL2 green)"
+    forbidden:
+      - "git add -A"
+      - "git stash"
+      - "git pull --rebase"
+      - "git rebase"
+      - "git commit --amend"
+      - "git commit --no-verify"
+  worktree:
+    init_script: scripts/agent-worktree-init.sh
+    cleanup_script: scripts/agent-worktree-cleanup.sh
+    convention: "branch=agent/<role>/<short-task-name>"
+    base: master
+  conflict_resolution:
+    rule: "If two agents edit the same file: STOP, surface to orchestrator, take serial turns"
+    never: "Auto-merge, force push, --no-verify"
+
+# Tool count invariant (canary)
+invariants:
+  tool_count:
+    expected: 130
+    verify: "grep -rE 'mcp\\.NewTool\\(\"' mcp/ | wc -l"
+    enforce_on:
+      - "post-commit (pre-push) — refactor commits MUST preserve count"
+      - "feature commits MAY change count; record in commit message"
