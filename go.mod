@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/algo2go/kite-mcp-alerts v0.6.0
-	github.com/algo2go/kite-mcp-audit v0.1.0
+	github.com/algo2go/kite-mcp-audit v0.2.0
 	github.com/algo2go/kite-mcp-billing v0.3.0
 	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/algo2go/kite-mcp-clockport v0.1.0
@@ -28,8 +28,8 @@ require (
 	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/algo2go/kite-mcp-ticker v0.1.0
 	github.com/algo2go/kite-mcp-usecases v0.1.0
-	github.com/algo2go/kite-mcp-users v0.1.0
-	github.com/algo2go/kite-mcp-watchlist v0.1.0
+	github.com/algo2go/kite-mcp-users v0.2.0
+	github.com/algo2go/kite-mcp-watchlist v0.2.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0

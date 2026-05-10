@@ -43,13 +43,13 @@ go 1.25.0
 
 require (
 	github.com/algo2go/kite-mcp-alerts v0.6.0
-	github.com/algo2go/kite-mcp-audit v0.1.0
+	github.com/algo2go/kite-mcp-audit v0.2.0
 	github.com/algo2go/kite-mcp-billing v0.3.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/algo2go/kite-mcp-riskguard v0.1.0
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
-	github.com/algo2go/kite-mcp-users v0.1.0
+	github.com/algo2go/kite-mcp-users v0.2.0
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
@@ -73,7 +73,7 @@ require (
 	github.com/algo2go/kite-mcp-templates v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-ticker v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-usecases v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-watchlist v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-watchlist v0.2.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

@@ -2,8 +2,8 @@ cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdB
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 github.com/algo2go/kite-mcp-alerts v0.6.0 h1:3Ue6jZc7qR1Z+Ng5Amo7L9YW2hXPMuRZuEoer9NaPZQ=
 github.com/algo2go/kite-mcp-alerts v0.6.0/go.mod h1:F+i2zV+U6b6eFvtfBhs3DZnFPIGiZTRUVZnFO/StScQ=
-github.com/algo2go/kite-mcp-audit v0.1.0 h1:U3JS8D4iXJvlZ/yqdXSDr+l6n0MmN/yP95duv8jpaGI=
-github.com/algo2go/kite-mcp-audit v0.1.0/go.mod h1:oQHRW5vMOHB/Dcz2FazDnF10/gbvnaA1eMXfHs4L2Pw=
+github.com/algo2go/kite-mcp-audit v0.2.0 h1:/H+V2RQ2rjRGYtCuAX4lBLlg3BodcIw8Mhce+PmwrRY=
+github.com/algo2go/kite-mcp-audit v0.2.0/go.mod h1:oQHRW5vMOHB/Dcz2FazDnF10/gbvnaA1eMXfHs4L2Pw=
 github.com/algo2go/kite-mcp-billing v0.3.0 h1:4ZrpSzQrSbmDBGAY4WHpdPJ9Vx/n3ucyHalIsJBhA/8=
 github.com/algo2go/kite-mcp-billing v0.3.0/go.mod h1:njg4ozWby+8a3dxs8CbidFobwu/LS3ZttKol05LNBJg=
 github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=
@@ -50,10 +50,10 @@ github.com/algo2go/kite-mcp-ticker v0.1.0 h1:ei0+PEVfOjfZ82NjoG3CVJO4QSC1wO5g3UJ
 github.com/algo2go/kite-mcp-ticker v0.1.0/go.mod h1:N86ZMlr9JTY3TNOGvMmcOtfm/WcN3kEX1jIMfN+VkPw=
 github.com/algo2go/kite-mcp-usecases v0.1.0 h1:nweFhIEIWEMjctHEF7ABX1ZsWEUuyFL+6QWILCZf+lI=
 github.com/algo2go/kite-mcp-usecases v0.1.0/go.mod h1:I8+tdjIHYKtYFNHyS8saJHBBGNJnoujBhXxWsUcgbV8=
-github.com/algo2go/kite-mcp-users v0.1.0 h1:kgMJezCuxqSSU6YoTzqWDxxRpQs7UmHvotQwjiowaNI=
-github.com/algo2go/kite-mcp-users v0.1.0/go.mod h1:hE07oc9IPQ7ypS7y1n8FCybRyd3sr40J+3YOc5/NCJk=
-github.com/algo2go/kite-mcp-watchlist v0.1.0 h1:zhrwfb6H4/AJ/fTRqRjlPE2hx0WjvDnP4FTUl1uZo30=
-github.com/algo2go/kite-mcp-watchlist v0.1.0/go.mod h1:lJdqCYYPjhTsDohqBSsrkkjiTrmkTw5Q2AtvEO4ja+k=
+github.com/algo2go/kite-mcp-users v0.2.0 h1:MmSuEKhyM/POv9WIdSB/Vw4nbh4wq1FWD02SbMNqqJQ=
+github.com/algo2go/kite-mcp-users v0.2.0/go.mod h1:hE07oc9IPQ7ypS7y1n8FCybRyd3sr40J+3YOc5/NCJk=
+github.com/algo2go/kite-mcp-watchlist v0.2.0 h1:H+Q6OxMAB2bfqioK4dNikyEB00uwcFZlgc3+7FUFyUw=
+github.com/algo2go/kite-mcp-watchlist v0.2.0/go.mod h1:lJdqCYYPjhTsDohqBSsrkkjiTrmkTw5Q2AtvEO4ja+k=
 github.com/antlr4-go/antlr/v4 v4.13.0 h1:lxCg3LAv+EUK6t1i0y1V6/SLeUi0eKEKdhQAlS8TVTI=
 github.com/antlr4-go/antlr/v4 v4.13.0/go.mod h1:pfChB/xh/Unjila75QW7+VU4TSnWnnk9UTnmpPaOR2g=
 github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/FBatYVw=
