@@ -2,7 +2,7 @@ package providers
 
 import (
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 )
 
 // audit_middleware.go — Wave D Phase 2 Slice P2.3b. Pure function

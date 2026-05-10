@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/audit
+module github.com/algo2go/kite-mcp-audit
 
 go 1.25.0
 

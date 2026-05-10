@@ -47,7 +47,7 @@ require (
 )
 
 require (
-	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-audit v0.1.0
 	github.com/algo2go/kite-mcp-ticker v0.1.0
 	github.com/algo2go/kite-mcp-watchlist v0.1.0
 )
@@ -98,6 +98,6 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
+	github.com/algo2go/kite-mcp-audit => ../audit
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 )

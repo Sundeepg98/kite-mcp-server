@@ -2,7 +2,7 @@ package kc
 
 import (
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 	"github.com/algo2go/kite-mcp-billing"
 	"github.com/algo2go/kite-mcp-registry"
 	"github.com/algo2go/kite-mcp-users"

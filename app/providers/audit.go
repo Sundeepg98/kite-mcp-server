@@ -4,7 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 )
 
 // ProvideAuditStore wraps an opened *alerts.DB as an *audit.Store.

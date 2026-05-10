@@ -19,7 +19,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 	"github.com/algo2go/kite-mcp-billing"
 	"github.com/algo2go/kite-mcp-instruments"
 	logport "github.com/algo2go/kite-mcp-logger"

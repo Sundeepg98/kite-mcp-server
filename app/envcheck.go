@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 )
 
 // envCheckCtx is the context used by envCheck's logger calls.

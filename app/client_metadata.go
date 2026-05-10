@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 )
 
 // withClientMetadata extracts client IP and User-Agent from the request

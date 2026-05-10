@@ -4,7 +4,7 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/algo2go/kite-mcp-audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops/admin"
 	"github.com/algo2go/kite-mcp-users"
 )
