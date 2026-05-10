@@ -8,7 +8,7 @@
 
 **Production state at audit-time**:
 - Master HEAD: `bcbe9f0`
-- Production: v1.3.0 / tools=111 (550+ commits stale per `forward-tracks-strategic-review.md`)
+- Production: v1.3.0 / tools=111 (production = master HEAD modulo `.research/`-only commits per `production-master-gap-report.md` — the "550+ commits stale" framing from `forward-tracks-strategic-review.md` is FALSIFIED 2026-05-11; no deploy backlog exists)
 - 28 algo2go external modules
 - Active recommendation from predecessor: deploy current master FIRST, then execute the 5 actions in this playbook
 
@@ -561,7 +561,7 @@ Per `final-pre-launch-verification.md` + `day-1-launch-ops-runbook.md`:
 
 | # | Blocker | Verification |
 |---|---|---|
-| 1 | Master deployed to Fly.io | `curl /healthz` shows `tools=130+` (NOT 111) AND `version` newer than v1.3.0 |
+| 1 | ~~Master deployed to Fly.io~~ — pre-flight check OBSOLETE 2026-05-11 per `production-master-gap-report.md`; production already = master modulo `.research/`-only. New pre-flight: `curl /healthz` returns `tools=111` (production-registered count; the prior `tools=130+` criterion was grep-error contamination). | `curl /healthz` shows `tools=111` AND `version=v1.3.0` (the binary literal — does not auto-bump per deploy) |
 | 2 | `og-image.png` returns 200 | `curl -sIo /dev/null -w "%{http_code}" https://kite-mcp-server.fly.dev/og-image.png` returns `200` |
 | 3 | dr-drill green (Item 1 above) | `gh run list --workflow dr-drill.yml -L 1` shows status=success |
 | 4 | Demo A GIF embedded (Item 3) | README hero has `<img>` tag pointing to `docs/assets/demo-portfolio-alert.gif`, file size ≤4MB, file fetchable on Fly.io at `/static/demo-portfolio-alert.gif` returns 200 |

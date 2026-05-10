@@ -1,7 +1,7 @@
 # 10000-Agent Capacity — Comprehensive Blocker Analysis + Phased Roadmap
 
 **Date**: 2026-05-06
-**HEAD**: `869b36a` (Path A FULLY CLOSED for broker + kc/money + kc/decorators external on algo2go; 27 in-tree workspace modules; v228 LIVE; tools=130 empirical; 40-deploy streak)
+**HEAD**: `869b36a` (Path A FULLY CLOSED for broker + kc/money + kc/decorators external on algo2go; 27 in-tree workspace modules; v228 LIVE; tools=130 empirical-per-grep — **CORRECTION 2026-05-11**: this "130" was a raw `grep mcp.NewTool(` over `mcp/` that included 19 `_test.go` fixtures; production-registered tools=111 per compile-and-run, verified via `production-master-gap-report.md` §1.4; 40-deploy streak ✓)
 **Builds on**: `cacbc20 architecture-scale-ceiling.md`, `6ee6520 architecture-scale-paths-A-B-C.md`, `725ac32 abc-100pct-complete-paths.md`, `21503fd broker-promotion-runbook.md`, sibling `.research/1000-agent-capacity-plan.md`
 **Charter**: doc-only research. NO code changes during plan-document commit.
 **User authorization**: broad — accepts regulatory paths (SEBI dialogue, NSE empanelment, multi-Kite-app sharding), expensive infra, "do what is necessary" investments.
@@ -32,16 +32,16 @@ After corrections, the campaign decomposes into:
 | Dimension | State | Implication for 10K |
 |---|---|---|
 | Workspace modules | **27 in-tree** + 3 external (algo2go: broker, kc/money, kc/decorators) | 27 more promotions × ~3-7h each = 81-189 agent-hours of mechanical work |
-| Production deploys | 40 consecutive (v189 → v228), tools=130 (empirically verified at commit-time) throughout | Single-machine deploy is current bottleneck |
+| Production deploys | 40 consecutive (v189 → v228) at doc-write time; 84+ as of 2026-05-11 (machine version 273), tools=111 production-registered throughout (the prior "tools=130" claim was raw-grep over `mcp/` including 19 `_test.go` fixtures — see `production-master-gap-report.md` §1.5) | Single-machine deploy is current bottleneck |
 | Single-binary deploy | Yes (Fly.io BOM region, `min_machines_running = 1`) | **Cannot scale horizontally** for trade path until Layer-2 work |
-| Single-repo CI | 14 workflows, GitHub-hosted runners | At N=10K, GitHub Actions API rate-limits at ~5K/hr token. Empirical breakage point N≈500-1K |
+| Single-repo CI | 15 workflows (was 14 at doc-write; `tool-count-drift.yml` added since), GitHub-hosted runners | At N=10K, GitHub Actions API rate-limits at ~5K/hr token. Empirical breakage point N≈500-1K |
 | Sub-packages (folders, not modules) | 12 (mcp/{*}, kc/ops/{*}) | Folder organization, share build target. Not directly relevant to 10K |
 | Empirical proven concurrency | 3-5 disjoint-scope agents (this session) | Maps to ~20-25 agent-equivalents per dispatch; **not yet validated at N=100+** |
 | Per-user IP whitelist | SEBI Apr 2026 mandate; static egress `209.71.68.157` BOM | Multi-cell distribution forces user to whitelist N IPs |
-| **SEBI per-second rate** | **`maxOrdersPerSecond = 9`** in `kc/riskguard/per_second.go:30` (defensive; Zerodha-enforced 10/sec broker-side) | **PER KITE APP PER USER**, NOT per operator. Multi-app sharding = N×10 effective sub-second throughput |
+| **SEBI per-second rate** | **`maxOrdersPerSecond = 9`** in `algo2go/kite-mcp-riskguard/per_second.go:30` (post Path A.21 promotion; was `kc/riskguard/per_second.go` pre-promotion; defensive; Zerodha-enforced 10/sec broker-side) | **PER KITE APP PER USER**, NOT per operator. Multi-app sharding = N×10 effective sub-second throughput |
 | MCP tool count | 130 (`grep -rE 'mcp\.NewTool\("' mcp/` at HEAD `869b36a`) | Tool surface scaling itself is not a 10K blocker; per-tool throughput is |
 
-**The critical finding**: SEBI's 10/sec is per `(Kite developer app, user)` pair. This empirical detail in `kc/riskguard/per_second.go:1-30` reframes the whole 10K plan: **trade-path scaling = procuring N Kite developer apps + sharding users across them**, not "decompose synchronous trade path" (which is impossible).
+**The critical finding**: SEBI's 10/sec is per `(Kite developer app, user)` pair. This empirical detail in `algo2go/kite-mcp-riskguard/per_second.go:1-30` (post Path A.21) reframes the whole 10K plan: **trade-path scaling = procuring N Kite developer apps + sharding users across them**, not "decompose synchronous trade path" (which is impossible).
 
 ---
 
@@ -55,7 +55,7 @@ The earlier framing conflated "operator hosts N users" with "operator runs N tra
 
 | Column | Detail |
 |---|---|
-| **Engineering-solvable?** | **YES (already done).** `kc/riskguard/per_second.go:30-50` already shards rate-limit by user. Each user's 10/sec budget is independent of any other user's. |
+| **Engineering-solvable?** | **YES (already done).** `algo2go/kite-mcp-riskguard/per_second.go:30-50` (post Path A.21) already shards rate-limit by user. Each user's 10/sec budget is independent of any other user's. |
 | **Regulatory action** | **None required.** SEBI 10/sec is a per-user constraint, not per-operator. |
 | **Physical-limit workaround** | **Cell-side rate-shaping** (token bucket per user) is the only addition needed for graceful degradation under burst load. Pure engineering. |
 | **Cost of workaround** | Engineering: ~1 week to add token-bucket rate-shaper at cell-router layer. **No multi-Kite-app procurement.** |
