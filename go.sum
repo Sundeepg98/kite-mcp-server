@@ -30,6 +30,8 @@ github.com/algo2go/kite-mcp-money v0.1.0 h1:4+HEW6r0/N7h+5jsjCNJZCHYwML/SkmE8/Fy
 github.com/algo2go/kite-mcp-money v0.1.0/go.mod h1:bjj4XnGM+YU2B8pPKTheanSVgW6ON3t0lh2d/m7ELek=
 github.com/algo2go/kite-mcp-oauth v0.1.0 h1:JpqI5MdQAYi8eJE0BaWlDDCRYA4LyQ6xxsNijcknOZI=
 github.com/algo2go/kite-mcp-oauth v0.1.0/go.mod h1:7jSnI4Qw6FyzzsWdWZBfgl0MFR0UzLE/sb7NqFEdJNk=
+github.com/algo2go/kite-mcp-papertrading v0.1.0 h1:tOOPO6k5wi3F5ySZII0ZFLP1b+/kShGy/BO1NzS1/gY=
+github.com/algo2go/kite-mcp-papertrading v0.1.0/go.mod h1:EK3iPng2Mfu1emHwUxy0/F2+6q0lxXdURswQJbqi8uw=
 github.com/algo2go/kite-mcp-registry v0.1.0 h1:s8lxMOkgc8GE3SXs/T8ZTQx8LCgcTBI9ltgNuhV2vt8=
 github.com/algo2go/kite-mcp-registry v0.1.0/go.mod h1:z2oX71IHhZDlgRWRSMgPlKssB4UQpfcyuFWBELwia8s=
 github.com/algo2go/kite-mcp-riskguard v0.1.0 h1:+toPprDTLLer0nl5ZsIDESfEcHkQ3pFPaw5uCDYZipE=

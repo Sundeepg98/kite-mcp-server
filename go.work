@@ -67,7 +67,6 @@ go 1.25.0
 use (
 	.
 	./app/providers
-	./kc/papertrading
 	./kc/sectors
 	./kc/telegram
 	./plugins

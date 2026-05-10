@@ -14,7 +14,6 @@ WORKDIR /app
 # via GOPROXY during go mod download instead of being in-tree COPY'd.
 COPY go.mod go.sum ./
 COPY app/providers/go.mod app/providers/go.sum* app/providers/
-COPY kc/papertrading/go.mod kc/papertrading/go.sum* kc/papertrading/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
 COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY plugins/go.mod plugins/go.sum* plugins/
