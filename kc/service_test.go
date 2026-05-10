@@ -10,7 +10,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-billing"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/algo2go/kite-mcp-users"
 )
 

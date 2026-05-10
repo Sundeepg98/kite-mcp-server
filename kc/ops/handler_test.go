@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 )
 
 // newTestHandler creates an ops Handler backed by a real kc.Manager with minimal config.

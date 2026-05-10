@@ -29,7 +29,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/algo2go/kite-mcp-oauth"
 )

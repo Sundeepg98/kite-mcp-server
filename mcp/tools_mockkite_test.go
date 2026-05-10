@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/algo2go/kite-mcp-users"
 	"github.com/algo2go/kite-mcp-oauth"

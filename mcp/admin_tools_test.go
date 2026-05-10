@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/algo2go/kite-mcp-users"
 	"github.com/algo2go/kite-mcp-oauth"
 	"github.com/zerodha/kite-mcp-server/mcp/common"

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 )
 
 // newTestInstrumentsManager creates a fast test instruments manager without HTTP calls

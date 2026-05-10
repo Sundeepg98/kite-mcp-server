@@ -1,7 +1,7 @@
 package ports
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 )
 
 // InstrumentPort is the bounded-context contract for the instruments

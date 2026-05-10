@@ -19,7 +19,7 @@ import (
 	brokerticker "github.com/algo2go/kite-mcp-broker/ticker"
 	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/algo2go/kite-mcp-watchlist"
 )
