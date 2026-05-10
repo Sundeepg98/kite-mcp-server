@@ -3,7 +3,7 @@ module github.com/zerodha/kite-mcp-server
 go 1.25.0
 
 require (
-	github.com/algo2go/kite-mcp-alerts v0.4.0
+	github.com/algo2go/kite-mcp-alerts v0.5.0
 	github.com/algo2go/kite-mcp-audit v0.1.0
 	github.com/algo2go/kite-mcp-billing v0.3.0
 	github.com/algo2go/kite-mcp-broker v0.1.0

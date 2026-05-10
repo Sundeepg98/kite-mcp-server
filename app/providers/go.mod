@@ -42,7 +42,7 @@ go 1.25.0
 // placeholder for "workspace-local-only".
 
 require (
-	github.com/algo2go/kite-mcp-alerts v0.4.0
+	github.com/algo2go/kite-mcp-alerts v0.5.0
 	github.com/algo2go/kite-mcp-audit v0.1.0
 	github.com/algo2go/kite-mcp-billing v0.3.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
