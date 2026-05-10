@@ -103,7 +103,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../cqrs
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../eventsourcing
-	github.com/algo2go/kite-mcp-i18n => ../i18n
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard

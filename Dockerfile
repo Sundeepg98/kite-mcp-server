@@ -26,7 +26,6 @@ COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
 COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
 COPY kc/domain/go.mod kc/domain/go.sum* kc/domain/
 COPY kc/eventsourcing/go.mod kc/eventsourcing/go.sum* kc/eventsourcing/
-COPY kc/i18n/go.mod kc/i18n/go.sum* kc/i18n/
 COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
 COPY kc/isttz/go.mod kc/isttz/go.sum* kc/isttz/
 COPY kc/legaldocs/go.mod kc/legaldocs/go.sum* kc/legaldocs/

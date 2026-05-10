@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/algo2go/kite-mcp-decorators v0.1.0
+	github.com/algo2go/kite-mcp-i18n v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
@@ -22,7 +23,6 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-i18n v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/instruments v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/legaldocs v0.0.0-00010101000000-000000000000
@@ -59,13 +59,14 @@ require (
 // Anchor 2 added app/providers as the first non-kc-prefixed extracted
 // module (Fx provider/recipe composition root for the DI graph).
 // Path A inauguration extracted broker (commit 6626812), kc/money
-// (commit b92173b), and kc/decorators (commit 7f71ccf) to algo2go
-// GitHub repos. Phase B canary deletion (broker+money @ commit
-// bef0b31, decorators @ this commit) drops their replace directives —
-// all three are now fetched from algo2go/kite-mcp-broker@v0.1.0 +
+// (commit b92173b), kc/decorators (commit 7f71ccf), and kc/i18n
+// (commit c25e37f) to algo2go GitHub repos. Phase B canary deletion
+// (broker+money @ commit bef0b31, decorators @ commit c19bca9, i18n
+// @ this commit) drops their replace directives — all four are now
+// fetched from algo2go/kite-mcp-broker@v0.1.0 +
 // algo2go/kite-mcp-money@v0.1.0 + algo2go/kite-mcp-decorators@v0.1.0
-// via GOPROXY. The require lines at the top of this go.mod are the
-// operative source for those modules.
+// + algo2go/kite-mcp-i18n@v0.1.0 via GOPROXY. The require lines at
+// the top of this go.mod are the operative source for those modules.
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
 	github.com/zerodha/kite-mcp-server/kc/alerts => ./kc/alerts
@@ -75,7 +76,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ./kc/cqrs
 	github.com/zerodha/kite-mcp-server/kc/domain => ./kc/domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ./kc/eventsourcing
-	github.com/algo2go/kite-mcp-i18n => ./kc/i18n
 	github.com/zerodha/kite-mcp-server/kc/instruments => ./kc/instruments
 	github.com/zerodha/kite-mcp-server/kc/isttz => ./kc/isttz
 	github.com/zerodha/kite-mcp-server/kc/legaldocs => ./kc/legaldocs

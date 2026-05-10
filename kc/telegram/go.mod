@@ -84,7 +84,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
-	github.com/algo2go/kite-mcp-i18n => ../i18n
 	github.com/zerodha/kite-mcp-server/kc/instruments => ../instruments
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
