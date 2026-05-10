@@ -56,7 +56,7 @@ MCP tool-call middleware (in `app/wire.go`):
 3. Audit (logging with CallID)
 4. Hooks (plugin before/after)
 5. CircuitBreaker (freezes on error spike)
-6. RiskGuard (9 pre-trade checks: kill switch, cap, count, rate, duplicate, idempotency key, confirmation, anomaly, off-hours)
+6. RiskGuard (11 pre-trade checks per `algo2go/kite-mcp-riskguard/guard.go`: order-value cap, qty limit, daily count, rate limit, per-second rate, duplicate, daily notional, idempotency key, confirmation, anomaly μ+3σ, off-hours — plus kill switch + circuit breaker + global freeze + auto-freeze + OTR-band + insufficient-margin + market-closed system layers; 17 `RejectionReason` constants total)
 7. Rate Limiter (per-tool per-user)
 8. Billing (tier gating via `ENABLE_TRADING` for order-placement tools)
 9. Paper Trading (order interception)
