@@ -11,7 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"

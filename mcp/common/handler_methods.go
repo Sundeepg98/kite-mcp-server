@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/algo2go/kite-mcp-users"

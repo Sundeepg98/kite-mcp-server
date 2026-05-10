@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/algo2go/kite-mcp-oauth"

@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/cqrs
+module github.com/algo2go/kite-mcp-cqrs
 
 go 1.25.0
 

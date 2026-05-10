@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 )
 
 // TestCommandBus_Login_ReachesManagerPort proves the batch-F setup handler

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 )
 
 // registerExitCommands wires CommandBus handlers for the position-exit

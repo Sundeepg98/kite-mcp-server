@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	logport "github.com/algo2go/kite-mcp-logger"

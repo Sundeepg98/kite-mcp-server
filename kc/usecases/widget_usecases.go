@@ -11,7 +11,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
 )
 

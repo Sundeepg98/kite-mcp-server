@@ -8,7 +8,7 @@ import (
 	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/algo2go/kite-mcp-instruments"

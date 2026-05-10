@@ -32,7 +32,7 @@ require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/app/providers v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-cqrs v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
@@ -88,7 +88,7 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
 	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit
-	github.com/zerodha/kite-mcp-server/kc/cqrs => ./kc/cqrs
+	github.com/algo2go/kite-mcp-cqrs => ./kc/cqrs
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ./kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ./kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard

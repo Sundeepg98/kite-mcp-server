@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )

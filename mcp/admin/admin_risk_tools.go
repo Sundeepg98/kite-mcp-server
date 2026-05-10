@@ -9,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"

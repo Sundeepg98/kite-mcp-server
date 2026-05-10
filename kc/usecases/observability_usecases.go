@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/algo2go/kite-mcp-cqrs"
 	logport "github.com/algo2go/kite-mcp-logger"
 )
 
