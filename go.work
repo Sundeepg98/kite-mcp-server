@@ -6,22 +6,24 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (26 modules — see `use` block below; arc was 30 -> 29 (sectors
+// Members (25 modules — see `use` block below; arc was 30 -> 29 (sectors
 // added by audit agent) -> 28 (broker + money removed by first Phase B)
-// -> 27 (decorators removed) -> 26 (i18n removed by this commit's Phase B):
+// -> 27 (decorators removed) -> 26 (i18n removed) -> 25 (legaldocs
+// removed by this commit's Phase B):
 //
 // The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
 // broker + kc/audit + kc/riskguard + kc/billing. Established the
 // "bidirectional cross-module deps with transitive replace" pattern
 // documented in their go.mod headers. Path A inauguration extracted
 // broker (commit 6626812), kc/money (commit b92173b), kc/decorators
-// (commit 7f71ccf), and kc/i18n (commit c25e37f) to external algo2go
-// GitHub repos. Phase B canary deletions removed broker + kc/money
-// (commit bef0b31), kc/decorators (commit c19bca9), and kc/i18n
-// (this commit) from the use block — they are now fetched from
+// (commit 7f71ccf), kc/i18n (commit c25e37f), and kc/legaldocs (commit
+// 568895e) to external algo2go GitHub repos. Phase B canary deletions
+// removed broker + kc/money (commit bef0b31), kc/decorators (commit
+// c19bca9), kc/i18n (commit 84aab63), and kc/legaldocs (this commit)
+// from the use block — they are now fetched from
 // algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
-// algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0
-// via GOPROXY.
+// algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0 +
+// algo2go/kite-mcp-legaldocs@v0.1.0 via GOPROXY.
 //
 // Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
 // roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
@@ -75,7 +77,6 @@ use (
 	./kc/eventsourcing
 	./kc/instruments
 	./kc/isttz
-	./kc/legaldocs
 	./kc/logger
 	./kc/papertrading
 	./kc/registry
