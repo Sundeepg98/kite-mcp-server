@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/isttz"
+	"github.com/algo2go/kite-mcp-isttz"
 )
 
 const (

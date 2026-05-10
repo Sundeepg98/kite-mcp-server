@@ -32,7 +32,7 @@ require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-isttz v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000
@@ -66,7 +66,7 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
-	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/algo2go/kite-mcp-isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

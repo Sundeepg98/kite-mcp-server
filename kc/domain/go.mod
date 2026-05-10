@@ -21,7 +21,7 @@ go 1.25.0
 //   - github.com/algo2go/kite-mcp-broker (used in holding.go,
 //     order.go, position.go, profile.go for broker DTO interop —
 //     extracted at commit 5d74acf)
-//   - github.com/zerodha/kite-mcp-server/kc/isttz (used in session.go
+//   - github.com/algo2go/kite-mcp-isttz (used in session.go
 //     for ISTNow() — extracted at commit a2ad8e0)
 //   - github.com/algo2go/kite-mcp-money (used in money.go
 //     for Money type embedding — extracted at commit b7fedcc)
@@ -38,7 +38,7 @@ go 1.25.0
 // the broader zero-monolith plan (commit 4 of 4 in this dispatch).
 require (
 	github.com/algo2go/kite-mcp-broker v0.1.0
-	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-isttz v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0
 )
 
@@ -55,5 +55,5 @@ require (
 )
 
 replace (
-	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/algo2go/kite-mcp-isttz => ../isttz
 )

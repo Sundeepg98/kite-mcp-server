@@ -12,10 +12,10 @@ go 1.25.0
 // commit a5e7e76): single-dep packages extracted in a single
 // dispatch. Replace count: 1 (kc/isttz only).
 require (
-	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-isttz v0.1.0
 	go.uber.org/goleak v1.3.0
 )
 
 require github.com/stretchr/testify v1.10.0 // indirect
 
-replace github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+replace github.com/algo2go/kite-mcp-isttz => ../isttz

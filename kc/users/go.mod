@@ -16,7 +16,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000 // indirect
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
 	golang.org/x/crypto v0.48.0
@@ -47,6 +47,6 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/algo2go/kite-mcp-isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 )

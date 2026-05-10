@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zerodha/kite-mcp-server/kc/isttz"
+	"github.com/algo2go/kite-mcp-isttz"
 )
 
 func TestSession_Email_AccessToken_IssuedAt(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/isttz
+module github.com/algo2go/kite-mcp-isttz
 
 go 1.25.0
 
