@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/algo2go/kite-mcp-audit"
-	"github.com/zerodha/kite-mcp-server/kc/sectors"
+	"github.com/algo2go/kite-mcp-sectors"
 )
 
 // ===========================================================================

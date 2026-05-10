@@ -38,7 +38,7 @@ require (
 	github.com/yuin/goldmark v1.8.2
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/app/providers v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/sectors v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-sectors v0.1.0
 	github.com/zerodha/kite-mcp-server/plugins v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
@@ -87,7 +87,7 @@ require (
 // operative source for those modules.
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
-	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors
+	github.com/algo2go/kite-mcp-sectors => ./kc/sectors
 	github.com/zerodha/kite-mcp-server/plugins => ./plugins
 	github.com/zerodha/kite-mcp-server/testutil => ./testutil
 )

@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/sectors
+module github.com/algo2go/kite-mcp-sectors
 
 go 1.25.0
 
