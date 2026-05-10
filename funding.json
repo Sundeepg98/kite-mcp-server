@@ -1,5 +1,5 @@
 {
-  "version": "v1.0.0",
+  "version": "v1.1.0",
   "entity": {
     "type": "individual",
     "role": "owner",
@@ -14,13 +14,12 @@
     {
       "guid": "kite-mcp-server",
       "name": "Kite MCP Server",
-      "description": "Open-source MCP (Model Context Protocol) server for Zerodha Kite Connect. Extends Zerodha's official read-only MCP with ~80 tools covering order placement, price alerts, Telegram briefings, paper trading, options Greeks (Black-Scholes), backtesting (4 strategies), technical indicators, portfolio rebalancing, sector exposure, tax-harvest analysis, and a riskguard safety layer (kill switch, order caps, rate limits). Per-user OAuth with AES-256-GCM encrypted credential storage. Ships MCP widgets for Claude.ai / Claude Desktop, a 24/7 Telegram trading bot, and a full audit trail. Production deployment on Fly.io. 330+ tests, Go 1.25, MIT licensed.",
+      "description": "Open-source MCP (Model Context Protocol) server for Zerodha Kite Connect. Extends Zerodha's official read-only MCP with 111 tools covering order placement (gated off on the hosted endpoint per NSE/INVG/69255 Path 2 via ENABLE_TRADING=false; trading enabled on self-hosted local builds), price alerts, Telegram briefings, paper trading, options Greeks (Black-Scholes), backtesting (4 strategies), technical indicators, portfolio rebalancing, sector exposure, tax-harvest analysis, and an 11-check pre-trade RiskGuard safety layer (kill switch, per-order value cap, quantity limit, daily order count, rate limit, per-second rate limit, duplicate detection, daily notional cap, idempotency dedup, anomaly μ+3σ, off-hours block — plus circuit-breaker + global-freeze layers). Per-user OAuth with AES-256-GCM encrypted credential storage (HKDF-derived key). Ships MCP widgets for Claude.ai / Claude Desktop, a Telegram trading bot, and a hash-chained tamper-evident audit trail with 90-day retention. Production deployment on Fly.io (Mumbai region, static egress IP 209.71.68.157 for SEBI April 2026 whitelisting mandate) with Litestream continuous replication to Cloudflare R2 (APAC). ~9,000 tests across 478 test files (host repo + 28 external algo2go/kite-mcp-* modules), Go 1.25, MIT licensed.",
       "webpageUrl": {
         "url": "https://kite-mcp-server.fly.dev/"
       },
       "repositoryUrl": {
-        "url": "https://github.com/Sundeepg98/kite-mcp-server",
-        "wellKnown": "https://github.com/Sundeepg98/kite-mcp-server/blob/master/funding.json"
+        "url": "https://github.com/Sundeepg98/kite-mcp-server"
       },
       "licenses": [
         "spdx:MIT"
@@ -31,12 +30,9 @@
         "model-context-protocol",
         "zerodha",
         "kite-connect",
-        "trading",
         "algo-trading",
         "ai",
-        "llm",
         "claude",
-        "open-source",
         "fintech",
         "india"
       ]
