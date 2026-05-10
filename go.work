@@ -71,7 +71,6 @@ use (
 	./kc/cqrs
 	./kc/eventsourcing
 	./kc/papertrading
-	./kc/registry
 	./kc/riskguard
 	./kc/sectors
 	./kc/telegram

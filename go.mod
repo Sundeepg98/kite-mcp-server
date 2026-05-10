@@ -15,6 +15,7 @@ require (
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0
 	github.com/algo2go/kite-mcp-oauth v0.1.0
+	github.com/algo2go/kite-mcp-registry v0.1.0
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/algo2go/kite-mcp-users v0.1.0
@@ -33,7 +34,6 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-registry v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/sectors v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
@@ -91,7 +91,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ./kc/cqrs
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ./kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ./kc/papertrading
-	github.com/algo2go/kite-mcp-registry => ./kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
