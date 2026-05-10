@@ -42,7 +42,7 @@ go 1.25.0
 // placeholder for "workspace-local-only".
 
 require (
-	github.com/algo2go/kite-mcp-alerts v0.5.0
+	github.com/algo2go/kite-mcp-alerts v0.6.0
 	github.com/algo2go/kite-mcp-audit v0.1.0
 	github.com/algo2go/kite-mcp-billing v0.3.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
@@ -74,6 +74,8 @@ require (
 	github.com/algo2go/kite-mcp-ticker v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-usecases v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-watchlist v0.1.0 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+	github.com/coder/websocket v1.8.12 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -99,6 +101,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/stripe/stripe-go/v82 v82.5.1 // indirect
+	github.com/tursodatabase/libsql-client-go v0.0.0-20251219100830-236aa1ff8acc // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
 	go.uber.org/dig v1.19.0 // indirect

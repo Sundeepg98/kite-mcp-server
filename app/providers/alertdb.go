@@ -25,6 +25,7 @@ type AlertDBConfig struct {
 	//   ""         (empty)  — defaults to "sqlite" (back-compat)
 	//   "sqlite"            — opens SQLite via alerts.OpenDB(Path)
 	//   "postgres"          — opens Postgres via alerts.OpenPostgresDB(URL)
+	//   "turso"             — opens libSQL/Turso via alerts.OpenLibSQL(URL)
 	//
 	// Production wiring binds from the ALERT_DB_DRIVER env var.
 	Driver string
@@ -34,12 +35,13 @@ type AlertDBConfig struct {
 	// Empty path with SQLite = in-memory mode = (nil, nil) return.
 	Path string
 
-	// URL is the Postgres connection string (ALERT_DB_URL env var).
-	// Used only when Driver is "postgres". Required when so —
-	// empty URL with Driver="postgres" is a configuration error
-	// (no in-memory Postgres equivalent).
+	// URL is the Postgres or libSQL connection string (ALERT_DB_URL env var).
+	// Used when Driver is "postgres" or "turso". Required for those —
+	// empty URL with non-SQLite driver is a configuration error
+	// (no in-memory equivalents exist).
 	//
-	// Format: postgres://user:pass@host:port/dbname?sslmode=...
+	// Postgres format: postgres://user:pass@host:port/dbname?sslmode=...
+	// Turso format:    libsql://<dbname>-<user>.<region>.turso.io?authToken=<JWT>
 	URL string
 }
 
@@ -115,7 +117,33 @@ func ProvideAlertDB(cfg AlertDBConfig, logger *slog.Logger) (*alerts.DB, error) 
 		}
 		return db, nil
 
+	case "turso":
+		// Phase 2.6 Path 6 deliverable per .research/phase-2-6-r10-decisions.md
+		// v7 (commit 7cb80a3). Track 1 of Path E empirically validated Turso
+		// ap-south-1 free tier; v7 selected Path 6 over Path 1.
+		//
+		// libSQL is SQLite-compatible at the protocol layer (`?` placeholders,
+		// ON CONFLICT, sqlite_master, pragma_table_info). Same SQLDB
+		// interface as SQLite + Postgres backends; same Save/Load API
+		// contracts. Only difference: hosted via libsql:// URL with
+		// ?authToken=<JWT> query param.
+		//
+		// Empty URL is a config error (symmetric with Postgres path; no
+		// in-memory libSQL mode). Open failures surface (no silent
+		// downgrade — symmetric with Postgres).
+		if cfg.URL == "" {
+			return nil, fmt.Errorf("ProvideAlertDB: turso driver requires URL (ALERT_DB_URL)")
+		}
+		db, err := alerts.OpenLibSQL(cfg.URL)
+		if err != nil {
+			if logger != nil {
+				logger.Error("Failed to open libSQL/Turso DB", "error", err)
+			}
+			return nil, fmt.Errorf("ProvideAlertDB turso: %w", err)
+		}
+		return db, nil
+
 	default:
-		return nil, fmt.Errorf("ProvideAlertDB: unknown driver %q (want sqlite or postgres)", cfg.Driver)
+		return nil, fmt.Errorf("ProvideAlertDB: unknown driver %q (want sqlite, postgres, or turso)", cfg.Driver)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/algo2go/kite-mcp-alerts"
@@ -151,8 +152,8 @@ func TestProvideAlertDB_PostgresDriver_EmptyURL_Errors(t *testing.T) {
 }
 
 // TestProvideAlertDB_UnknownDriver_Errors verifies that any non-sqlite,
-// non-postgres Driver value returns an error. Unknown drivers are config
-// bugs and must surface, not silently fall through.
+// non-postgres, non-turso Driver value returns an error. Unknown drivers
+// are config bugs and must surface, not silently fall through.
 func TestProvideAlertDB_UnknownDriver_Errors(t *testing.T) {
 	t.Parallel()
 
@@ -162,6 +163,69 @@ func TestProvideAlertDB_UnknownDriver_Errors(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("expected nil DB on unknown driver; got non-nil")
+	}
+}
+
+// TestProvideAlertDB_TursoDriver_EmptyURL_Errors verifies that
+// Driver="turso" with an empty URL is a configuration error. Like
+// Postgres, libSQL has no in-memory mode — empty URL means the
+// operator forgot to set ALERT_DB_URL.
+//
+// Phase 2.6 Path 6 deliverable per kite-mcp-server R-10 v7 doc.
+//
+// Asserts the SPECIFIC turso-related error message — NOT the
+// "unknown driver" default-branch error. This is the test that
+// catches the missing case "turso" arm in the switch.
+func TestProvideAlertDB_TursoDriver_EmptyURL_Errors(t *testing.T) {
+	t.Parallel()
+
+	got, err := ProvideAlertDB(AlertDBConfig{Driver: "turso", URL: ""}, testLogger())
+	if err == nil {
+		t.Fatal("expected error for turso driver with empty URL")
+	}
+	if got != nil {
+		t.Errorf("expected nil DB on config error; got non-nil")
+	}
+	// Must hit the Turso-specific empty-URL branch, NOT fall through
+	// to the default "unknown driver" arm.
+	want := "turso driver requires URL"
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("expected error containing %q (turso-specific message); got %q", want, err.Error())
+	}
+}
+
+// TestProvideAlertDB_TursoDriver_InvalidURL_Errors verifies that
+// Driver="turso" with an unreachable URL surfaces as error (no
+// silent downgrade — symmetric with Postgres path).
+//
+// We use a deliberately-malformed URL that cannot reach any real
+// libSQL endpoint; the error happens at sql.Open OR Ping time, both
+// of which OpenLibSQL surfaces as wrapped errors.
+//
+// Asserts the error message comes from OpenLibSQL (libSQL-specific),
+// NOT from the default-branch "unknown driver" arm.
+func TestProvideAlertDB_TursoDriver_InvalidURL_Errors(t *testing.T) {
+	t.Parallel()
+
+	got, err := ProvideAlertDB(AlertDBConfig{
+		Driver: "turso",
+		URL:    "libsql://nonexistent.invalid-host.example.invalid?authToken=fake",
+	}, testLogger())
+	if err == nil {
+		t.Fatal("expected error for turso driver with unreachable URL")
+	}
+	if got != nil {
+		t.Errorf("expected nil DB on open failure; got non-nil")
+	}
+	// Must hit the Turso-specific arm — error wrapped by ProvideAlertDB
+	// or by OpenLibSQL itself. Either way, "turso" or "libsql" must
+	// appear in the error chain (NOT "unknown driver").
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "turso") && !strings.Contains(msg, "libsql") {
+		t.Errorf("expected turso/libsql-specific error; got %q", err.Error())
+	}
+	if strings.Contains(msg, "unknown driver") {
+		t.Errorf("error indicates default-branch fallthrough (case 'turso' missing): %q", err.Error())
 	}
 }
 
