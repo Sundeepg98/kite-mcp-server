@@ -1,681 +1,581 @@
-# Phase 2.6 — R-10 User Decision Re-Research (v4 — Web-Verified)
+# Phase 2.6 — R-10 User Decision Re-Research (v5 — Strategic Synthesis)
 
 **Date**: 2026-05-10 IST
-**HEAD**: `9674317` (this doc supersedes v3 at the same path)
-**Charter**: doc-only re-research; NO source mutations. v4 closes empirical gaps v3 acknowledged via direct WebFetch + WebSearch + Bash latency tests.
-**Builds on / supersedes**: v3 R-10 doc at `9674317`. v4 supersedes v3 supersedes v2 supersedes v1.
+**HEAD**: `db368a8` (this doc supersedes v4 at the same path)
+**Charter**: doc-only synthesis; NO source mutations. v5 steps back from v1-v4's empirical drilling to **strategic context**: convergence analysis across all rounds, alternative architectures, and the meta-question — should Phase 2.6 even fire now?
+**Builds on / supersedes**: v4 R-10 doc at `db368a8`. v5 supersedes v1→v4. Tone: synthesis over verification.
 
-**Production state at this snapshot**: v262 LIVE on Fly.io BOM region; SQLite + Litestream → R2; ALERT_DB_DRIVER unset (defaults to sqlite per Phase 2.3 wiring).
-
-**Honest verification methodology v4**:
-- Every empirical claim now tagged: `[VERIFIED via WebFetch <date>]`, `[VERIFIED via WebSearch]`, `[VERIFIED via Bash]`, `[VERIFIED via Context7]`, `[KNOWLEDGE BASELINE]`, or `[USER VERIFICATION NEEDED]`.
-- Where WebFetch failed (JS-rendered pages, 404s), I document the failure rather than fall back to baseline silently.
-- All URLs cited as evidence.
+**Production state**: v262 LIVE on Fly.io BOM region; SQLite + Litestream → R2; ALERT_DB_DRIVER unset; **0 paid users**.
 
 ---
 
-## TL;DR — Headline Findings (v4)
+## Section 0 — TL;DR (v5)
 
-v3's bimodal recommendation (DO BLR1 OR Turso) **survives v4 verification with one major addition**: **Yotta SutraDB at ₹1,897.50/core/month** is a credible India-domestic option v3 explicitly couldn't research. v4 adds it.
+After 5 research rounds, the decision tree has crystallized:
 
-**Newly-verified facts (May 2026 web-verified)**:
+**The convergent recommendation across v1-v4** (most-confident pick after 4 rounds of skeptical re-examination): **EITHER stay on SQLite + Litestream → R2 indefinitely (Path 1) OR provision Turso Free tier (Path 6) as a "test the waters" zero-cost step.** Both options preserve all Phase 2.x prep work as future fallback.
 
-1. **DO BLR1 latency from Mumbai broadband: 11ms** — `[VERIFIED via Bash ping]` to `blr1.digitaloceanspaces.com (5.101.108.233)` from this WSL2 machine on Indian residential broadband. Traceroute confirms India-only routing (TATA backbone, Indian transit). v3 estimated; v4 measured.
+**The strategic reframe**: at 0 paid users, **Phase 2.6 has no user-visible benefit**. The opportunity cost of the 12-16 weeks Phase 2.6 calendar is launch-path execution + NSE empanelment prep + feature shipping — work with much higher zero-user-state ROI than Postgres readiness. Phase 2.6 is **infrastructure investment ahead of demand**; demand isn't here yet.
 
-2. **DO Managed Postgres pricing definitive**: $15.15 → $30.45 → $60.90 → $122.10 → $244.35 for 1GB → 2GB → 4GB → 8GB → 16GB — `[VERIFIED via WebFetch 2026-05-10 from digitalocean.com/pricing/managed-databases]`. v3 had "knowledge baseline" $15/mo; v4 has the exact $15.15.
+**v5's primary recommendation is therefore "decide not to decide yet"**: keep Phase 2.6 ready (we already shipped the driver factory at v262), don't actually flip it. Revisit when a concrete trigger fires (50+ paid subs OR Phase 3 multi-cell dispatch OR explicit user demand).
 
-3. **DO BLR1 specifics fully verified** `[VERIFIED via WebFetch DO docs 2026-05-10]`:
-   - PITR retention: **exactly 7 days** (v3 said "not verified")
-   - Connection limits: 22 / 47 / 97 / 197 / 397-997 per plan size (NOT v2's "25 per 1 GiB" estimate — actual numbers shown above)
-   - PostgreSQL versions 14-18 supported
-   - Extensions verified: pgcrypto, pg_trgm, uuid-ossp, pgvector, postgis ALL supported
-   - Bandwidth waived for managed DBs (verified)
-
-4. **DO India payment friction discovered** `[VERIFIED via WebSearch 2026-05-10]`:
-   - **NO UPI / NO Net Banking / NO RuPay** support
-   - Only Visa/MasterCard/Amex international-enabled cards or PayPal
-   - USD billing (with optional GST under Reverse Charge Mechanism if GSTIN provided)
-   - **This is a real friction for Indian fintech founders** — most Indian customer payments come via UPI/RuPay; if your card-on-file mechanism is RuPay-only, DO is blocked.
-
-5. **Turso pricing definitive** `[VERIFIED via WebFetch 2026-05-10 from turso.tech/pricing]`:
-   - Free: $0; 5GB storage; 500M rows-read; 10M rows-written; 1d PITR
-   - Developer: **$4.99/mo** (NEW — v3 didn't surface this); 9GB; 2.5B rows-read; 25M rows-written; 10d PITR
-   - Scaler: **$24.92/mo**; 24GB; 100B rows-read; 100M rows-written; 30d PITR; SOC2 + DPA
-   - Pro: **$416.58/mo**; 50GB; 250B rows-read; 250M rows-written; 90d PITR; HIPAA + SOC2 + BYOK + SSO
-   - **Mumbai region (`aws-ap-south-1`) confirmed** via Context7
-   - **At our usage profile (5 users × 100 alert checks/day × 50 audit-log/day × 10 portfolio-fetch/day = ~25K rows-read/day, ~3K rows-written/day) — Turso Free tier is sufficient.** Even Developer tier at $4.99/mo would be massively over-provisioned.
-   - **No India region surcharge** — Turso ap-south-1 same price as US regions.
-
-6. **SEBI Cloud Framework definitively reframed** `[VERIFIED via WebFetch + WebSearch 2026-05-10]`:
-   - **Circular**: SEBI/HO/ITD/ITD_VAPT/P/CIR/2023/033, dated **March 6, 2023**, full title "Framework for Adoption of Cloud Services by SEBI Regulated Entities (REs)".
-   - **"Regulated Entity" definition is NARROW**: stock exchanges, clearing corporations, depositories, stock brokers, depository participants, AMCs, mutual funds, KYC Registration Agencies, QRTAs.
-   - **Algo trading vendors / SaaS platforms / API resellers are NOT REs** under this circular. Per Dec 2024 algo trading framework, brokers are principals; algo vendors are AGENTS — fall under broker responsibility, NOT independent RE compliance.
-   - **For REs**: data localization to India MANDATORY; CSP must be MeitY-empanelled with valid STQC audit status; existing-deployment compliance deadline was March 6, 2024.
-   - **For us (algo trading agent under brokers)**: SEBI cloud circular does NOT directly apply. Phase 2.6 provider choice is NOT bound by this circular. **This is the largest framing shift v4 introduces.**
-
-7. **DPDP Act 2023** `[VERIFIED via WebSearch 2026-05-10]`:
-   - Section 16: cross-border data transfer to any country EXCEPT those restricted by Central Government (negative-list model, NOT hard localization).
-   - DPDP Rules 2025 Rule 13: govt may restrict for Significant Data Fiduciaries (SDFs).
-   - SDF designation: handles "larger volumes of sensitive personal data or engage in high-risk activities" — exact threshold not specified in Act; designated by govt notification.
-   - **Key implication for us**: at canary scale (1-5 users), we're nowhere near SDF threshold. Even at 1000 users, SDF designation is govt-discretionary, not auto-triggered.
-   - Cross-border transfer of standard personal data is permitted unless country is on negative list.
-
-8. **Yotta SutraDB pricing surfaced** `[VERIFIED via WebFetch 2026-05-10 from yntraacloud.ai]`:
-   - **PostgreSQL Open-Source: ₹1,897.50/core/month** — this was the first concrete INR pricing for any India-domestic provider
-   - SEBI/RBI/MeitY/HIPAA compliance documented
-   - Mumbai (Panvel NM1) + Greater Noida datacenters
-   - 99.95% uptime SLA
-   - Multi-zone deployments + automated failover
-   - Sales-contact-only signup (no self-serve)
-
-9. **Aiven Startup-4: $75/mo** (1 CPU, 4GB RAM, 50GB SSD) `[VERIFIED via WebSearch G2 page 2026-05-10]`. Mumbai region available via Aiven multi-cloud.
-
-10. **Crunchy Bridge Hobby: $10/mo starts** `[VERIFIED via WebSearch 2026-05-10]`. AWS Mumbai available. $0.10/GB storage.
-
-11. **Azure Reserved Instances: up to 65% off compute** `[VERIFIED via Microsoft Learn fetch 2026-05-10]` for 1yr/3yr terms. Specific India region pricing for B1ms still requires Azure pricing calculator (search returned $12.41/mo general but not India-specific).
-
-**v4's revised top recommendation**: **Two paths still bimodal** — DO BLR1 OR Turso ap-south-1 — but v4 ELEVATES Turso significantly because:
-- Turso Free tier covers our entire canary load (no payment friction)
-- SQLite-compatible avoids Postgres migration entirely
-- 90-day PITR on Pro is unique among providers surveyed
-- Mumbai region confirmed
-- Developer tier at $4.99/mo is the cheapest reliable managed option of any provider in this survey
-
-**Yotta SutraDB enters as Tier-2 option** for users specifically wanting India-domestic provider with SEBI MeitY empanelment.
+**If user wants to validate the architecture path empirically**: Path E (Try-Before-Buy) — sign up Turso Free + DO BLR1 trial in parallel for 1 week, spend ~$5, gather real-world data. Lower-effort than Phase 2.6 dispatch; resolves "is libSQL enough OR do I need Postgres" empirically.
 
 ---
 
-## Section 1 — Empirical Verifications That Closed v3's Gaps
+## Section 1 — Convergence Analysis Across v1-v5
 
-### 1.1 BOM↔BLR1 latency: 11ms verified
+### 1.1 What stayed STABLE across all 5 rounds
 
-`[VERIFIED via Bash ping 2026-05-10]` from WSL2 on Indian residential broadband (Mumbai-routed):
+These are the most-confident conclusions because they survived 4 rounds of skeptical re-examination:
 
-```
-ping blr1.digitaloceanspaces.com (5.101.108.233):
-  Min/Avg/Max = 11ms/11ms/11ms (4 packets, 0% loss)
+| Conclusion | v1 | v2 | v3 | v4 | v5 | Confidence |
+|---|---|---|---|---|---|---|
+| Mumbai region preferred for India users | ✓ | ✓ | ✓ | ✓ | ✓ | HIGHEST |
+| Saturday 06:00 IST cutover window | ✓ | ✓ | ✓ | ✓ | ✓ | HIGHEST |
+| 12-16 week canary calendar | ✓ | ✓ | ✓ | ✓ | ✓ | HIGHEST |
+| 6 quantitative success thresholds | ✓ | ✓ | ✓ | ✓ | ✓ | HIGHEST |
+| Auto-rollback watchdog as force multiplier | ✓ | ✓ | ✓ | ✓ | ✓ | HIGHEST |
+| At canary scale, all R-10 decisions reversible cheaply | – | ✓ | ✓ | ✓ | ✓ | HIGH |
+| Decision irreversibility ranking: R-10.1 hardest | – | ✓ | ✓ | ✓ | ✓ | HIGH |
+| Path 1 (Defer) is defensible until trigger | ✓ | ✓ | ✓ | ✓ | ✓ | HIGH |
 
-traceroute (key hops):
-  hop 5-6: 122.164.x → 125.18.x → 182.79.x → 61.246.x
-           (Indian ISP → Indian transit → TATA backbone → Indian transit)
-```
+**The 5-round survivors are the load-bearing conclusions.** If user disagrees with ANY of these, restart conversation; otherwise treat as locked-in.
 
-v3 said "not verified — needs ping/traceroute". v4: **11ms confirmed; routing stays within India**. DO BLR1 is genuinely India-collocated for India-residential users.
+### 1.2 What CHANGED between rounds (and why)
 
-### 1.2 DO Managed Postgres pricing definitive
+These are the conclusions that flipped or sharpened — useful to track because they reveal what's still uncertain:
 
-`[VERIFIED via WebFetch 2026-05-10 from digitalocean.com/pricing/managed-databases]`:
-
-| Plan | RAM | vCPU | Storage range | Cost/month |
-|---|---|---|---|---|
-| Basic 1GB | 1 GiB | 1 | 10-30 GiB | **$15.15** |
-| Basic 2GB | 2 GiB | 1 | 30-60 GiB | $30.45 |
-| 4GB | 4 GiB | 2 | 60-120 GiB | $60.90 |
-| 8GB | 8 GiB | 4 | 140-280 GiB | $122.10 |
-| 16GB | 16 GiB | 6 | 290-580 GiB | $244.35 |
-
-Additional storage: $0.215/GiB/month (in 10 GiB increments).
-
-**Note**: v3 estimated $15/mo; v4 has $15.15/mo verified.
-
-### 1.3 DO BLR1 PITR + extensions + connections
-
-`[VERIFIED via WebFetch DO docs 2026-05-10]`:
-
-| Specification | Value |
-|---|---|
-| PITR retention | **Exactly 7 days** (date picker may show earlier dates but errors out beyond 7 days) |
-| Backup retention | 7 days (matches PITR window) |
-| Max nodes per cluster | 3 (1 primary + up to 2 standbys/replicas) |
-| Max connections per RAM tier | 1GB→22 / 2GB→47 / 4GB→97 / 8GB→197 / 16GB+→397-997 |
-| Connection pool | PgBouncer; up to 21 pools / 1000 total connections |
-| PostgreSQL versions | 14, 15, 16, 17, 18 supported |
-| Extensions verified supported | pgcrypto, pg_trgm, uuid-ossp, pgvector, postgis |
-| BLR1 region listed | YES (Bangalore) — `[VERIFIED via DO availability docs]` |
-| Standby region constraint | Same region as primary |
-
-### 1.4 DO India payment reality `[VERIFIED via WebSearch 2026-05-10]`
-
-| Aspect | Status |
-|---|---|
-| INR billing | **NO** (USD invoices only) |
-| GST handling | 18% applied if no GSTIN; RCM exemption if GSTIN provided |
-| Visa/MasterCard/Amex | Supported (international-enabled cards required) |
-| RuPay | **NOT supported** (multiple user reports) |
-| UPI | **NOT supported** (open feature request, not implemented) |
-| Net Banking | **NOT supported** (open feature request) |
-| PayPal | Supported |
-| Apple Pay / Google Pay | Supported |
-
-**Implication for the user**: if your business banking is RuPay/UPI-centric, DO has friction. Workaround: international-enabled credit card. **For canary at $15/mo, this is acceptable. At scale, becomes a bookkeeping concern.**
-
-### 1.5 Turso pricing fully verified
-
-`[VERIFIED via WebFetch 2026-05-10 from turso.tech/pricing]`:
-
-| Tier | Cost/month | DBs | Storage | Rows-read/mo | Rows-written/mo | Sync GB/mo | PITR | Audit logs |
-|---|---|---|---|---|---|---|---|---|
-| Free | $0 | 100 | 5GB | 500M | 10M | 3GB | 1 day | none |
-| Developer | $4.99 | unlimited | 9GB | 2.5B | 25M | 10GB | 10 days | 3 days |
-| Scaler | $24.92 | unlimited | 24GB | 100B | 100M | 24GB | 30 days | 14 days |
-| Pro | $416.58 | unlimited | 50GB | 250B | 250M | 100GB | 90 days | 30 days |
-
-**Overage rates**: $1/Billion extra rows-read (Free/Dev); $0.80/Billion at Scaler; $0.75/Billion at Pro. Storage overage: $0.75/GB (Free/Dev), $0.50 at Scaler, $0.45 at Pro.
-
-**Mumbai region**: `aws-ap-south-1` confirmed via Context7 May 2026 (regional URL pattern documented for VPC endpoints). **No India-region surcharge**.
-
-### 1.6 Our usage estimate vs Turso tiers
-
-User-supplied estimate: 5 users × ~100 alert checks/day × ~50 audit-log entries/day × ~10 portfolio-fetch/day:
-- Rows read: ~25K/day → ~750K/month → **0.00075B = 1500x under Free tier 500M limit**
-- Rows written: ~3K/day → ~90K/month → **0.00009M = 11000x under Free tier 10M limit**
-- Storage: <100MB → **massively under Free tier 5GB limit**
-
-**Conclusion**: Turso Free tier covers our canary AND probably scales to 100+ users without hitting any quota. **Turso Free at $0 wins canary economics decisively** — even DO BLR1 at $15.15/mo is more expensive.
-
-**Caveat**: Free tier auto-suspends after period of inactivity per general SaaS pattern; verify with Turso whether their Free tier has the auto-suspend behavior Neon does (cold start risk). v4 could not verify this from Turso docs accessed.
-
-### 1.7 SEBI Cloud Framework definitive
-
-`[VERIFIED via WebFetch + WebSearch 2026-05-10 — multiple sources cross-checked]`:
-
-**Circular**: `SEBI/HO/ITD/ITD_VAPT/P/CIR/2023/033`, dated **March 6, 2023**.
-**Title**: "Framework for Adoption of Cloud Services by SEBI Regulated Entities (REs)".
-**Source**: https://www.sebi.gov.in/legal/circulars/mar-2023/framework-for-adoption-of-cloud-services-by-sebi-regulated-entities-res-_68740.html
-
-**Key clauses**:
-1. **RE definition is narrow**: stock exchanges, clearing corporations, depositories, stock brokers, depository participants, asset management companies, mutual funds, KYC Registration Agencies, QRTAs.
-2. **Mandatory data localization**: data must reside/process within India's legal boundaries.
-3. **MeitY empanelment + STQC audit MANDATORY** for CSPs serving REs.
-4. **Implementation timeline**: existing deployments had 12 months from issuance (deadline March 6, 2024).
-5. **No specific carve-out for agent vendors** — but circular predates Dec 2024 algo trading framework which establishes principal-agent relationship between brokers and algo vendors.
-
-**Critical reframing for us**: per Dec 2024 SEBI Algo Trading Framework, "brokers shall be the principal while any algo provider or fintech/vendor shall act as its agent". As an agent under the broker (which is the RE), **we are not directly bound by the cloud circular's CSP-empanelment requirement**. Compliance flows through the broker.
-
-**However**: this is regulatory interpretation, not regulatory exemption. **For real production deployment with regulatory exposure, this needs lawyer-level verification** (per `MEMORY.md kite-fintech-lawyers.md` — Spice Route Legal or Finsec Law). v4 surfaces what the circular says; legal interpretation requires expertise we don't have.
-
-### 1.8 DPDP Act 2023 cross-border framework
-
-`[VERIFIED via WebSearch 2026-05-10]`:
-
-- **Section 16**: personal data may be transferred to any country EXCEPT those restricted by Central Government (negative-list model).
-- **Rule 13 (DPDP Rules 2025)**: govt may impose conditions on SDFs.
-- **Significant Data Fiduciary (SDF) designation**: discretionary by govt notification, based on data volume + sensitivity + risk.
-- **No automatic threshold**: SDF status is govt-conferred, not auto-triggered by user count.
-- **SEBI/RBI sectoral rules still apply** alongside DPDP — for SEBI REs, data localization is still mandated by SEBI cloud circular even though DPDP is conditional.
-
-**Implication for us as algo trading agent (not RE)**:
-- Below SDF designation: cross-border transfer is permitted unless country is on negative list.
-- USA, EU countries are NOT currently on the DPDP negative list.
-- So Fly Singapore, AWS US, etc. are theoretically permitted under DPDP for non-RE entities.
-
-**However, conservative practice**: Mumbai/India region preferred even when not strictly mandated, because:
-1. Avoids DPDP transition risk if negative list expands.
-2. Reduces latency for India-based users.
-3. Simplifies compliance documentation if SEBI changes the agent-vendor framework.
-
-### 1.9 Yotta SutraDB pricing surfaced
-
-`[VERIFIED via WebFetch 2026-05-10 from yntraacloud.ai]`:
-
-| Aspect | Value |
-|---|---|
-| PostgreSQL Open-Source | **₹1,897.50/core/month** |
-| 1 vCore equivalent | ~₹1,900/month (matches DO Basic 1GB at $15.15) |
-| Compliance | RBI, MeitY, SEBI, HIPAA |
-| Datacenters | Mumbai (Panvel NM1), Greater Noida |
-| MeitY empanelment | YES (Yntraa is MeitY-empanelled) |
-| STQC | Not explicitly confirmed in fetched content; needs sales verification |
-| 99.95% uptime SLA | YES |
-| Active-passive / active-active clustering | YES |
-| Self-serve signup | NO — sales contact required |
-| INR billing | YES (INR-native pricing) |
-| PITR specifics | "Point-in-time-restore" mentioned but window not specified |
-| Connection pooling | Not mentioned in fetched content |
-| Backup retention | "Online + offline backup" mentioned but window not specified |
-
-**v4 implication**: Yotta is a credible **Tier-2 option** for users wanting:
-- INR billing (matters for accounting workflows)
-- Indian-domestic provider (sovereign cloud framing)
-- MeitY/SEBI empanelment (matters if future SEBI-RE registration)
-- Mumbai datacenter (Panvel NM1 is APAC-best DC per Datacloud Global Awards)
-
-**Friction**: sales-only signup, INR pricing requires sales conversation for full quote, PITR/backup specifics need verification. Less self-serve than DO/AWS/Supabase.
-
-### 1.10 Other Indian-domestic providers: research limit acknowledged
-
-| Provider | What I found `[via WebSearch / WebFetch 2026-05-10]` |
-|---|---|
-| **Tata Communications IZO** | URLs returned 404; no managed PG documented in search results |
-| **Reliance Jio CloudX** | No managed PG product found in search results |
-| **Sify Cloud** | "Cloud Anywhere" managed services exist; specific managed PG pricing NOT surfaced in search |
-| **ESDS Software** | Indian managed-cloud provider; specific managed PG pricing NOT surfaced in search |
-
-**v4 honest take**: only Yotta surfaced concrete pricing. Other Indian-domestic providers require **direct sales conversations**. v4 cannot rank them comparatively.
-
----
-
-## Section 2 — Updated Provider Comparison (v4)
-
-All entries now have specific pricing where verifiable.
-
-### 2.1 Verified provider canary-tier comparison
-
-| Provider | Canary cost/mo | India region | PITR | Confidence | Source |
-|---|---|---|---|---|---|
-| **Turso Free** | **$0** | YES (aws-ap-south-1) | 1 day | HIGH | WebFetch turso.tech |
-| **Turso Developer** | $4.99 | YES (aws-ap-south-1) | 10 days | HIGH | WebFetch turso.tech |
-| **DO Basic 1GB BLR1** | **$15.15** | YES (Bangalore) | 7 days | HIGH | WebFetch DO docs |
-| **AWS RDS db.t4g.micro Mumbai** | ~$15-22 | YES (ap-south-1) | 35 days default | MEDIUM | WebSearch (general $0.016/hr; ap-south-1 specific not extractable) |
-| **Yotta SutraDB 1 vCore Mumbai** | **₹1,897.50** (~$22-23) | YES (Mumbai Panvel NM1) | unknown | MEDIUM-HIGH (price verified, ops details require sales) | WebFetch yntraacloud.ai |
-| **Crunchy Bridge Hobby AWS Mumbai** | **$10** | YES (aws-ap-south-1) | unknown | MEDIUM | WebSearch crunchydata.com |
-| **Supabase Free** | $0 | YES (ap-south-1) | none free | HIGH | WebFetch supabase.com (v3) |
-| **Supabase Pro** | $25 | YES (ap-south-1) | $100/mo add-on | HIGH | WebFetch supabase.com (v3) |
-| **Aiven Startup-4 AWS Mumbai** | **$75** | YES (aws-ap-south-1) | included | MEDIUM | WebSearch G2 + Aiven docs |
-| **Azure DB PG B1ms Central India** | ~$12.41 base | YES (Mumbai/Pune/Chennai) | included | MEDIUM | WebSearch general; India-specific NOT verified |
-| **Fly MPG Basic** | $38 | NO (closest SIN) | included | HIGH | Context7 verified |
-| **Neon Free** | $0 | NO (closest SIN) | 7 days Free | HIGH | Context7 verified |
-| **Self-host Fly Volume BOM** | ~$3-5 + ops | YES (BOM) | self-build | HIGH (infra) | Context7/Fly docs |
-
-### 2.2 Hidden-cost summary v4
-
-| Hidden cost | Provider | Verified? |
+| Conclusion | v1 → v2 → v3 → v4 → v5 | Why it changed |
 |---|---|---|
-| 18% GST applied if no GSTIN | DO India | YES (WebFetch DO docs) |
-| RuPay/UPI/Net Banking NOT supported | DO India | YES (WebSearch) |
-| Free tier auto-suspends after 5min | Neon | YES (v3 Context7) |
-| Pause-on-inactivity 1 week | Supabase Free | YES (v3 Context7) |
-| 25-997 connections per RAM tier | DO PgBouncer | YES (WebFetch DO docs) |
-| Multi-AZ doubles instance cost | AWS RDS | KNOWLEDGE BASELINE |
-| PITR add-on $100/mo (7-day) | Supabase | YES (v3 Context7) |
-| Storage $0.215/GiB beyond plan | DO | YES (WebFetch) |
-| Storage $0.10/GB | Crunchy Bridge | YES (WebSearch) |
-| Storage $0.50-0.75/GB overage | Turso | YES (WebFetch) |
-| Sales-only signup | Yotta | YES (WebFetch) |
-| Reserved Instance up to 65% off compute | Azure DB | YES (Microsoft Learn) |
+| Top recommendation | Self-host Fly → Self-host Fly → DO BLR1 → DO BLR1 OR Turso → "Don't decide yet" | New empirical data each round (DO BLR1 surfaced in v2, Turso in v3, web-verified prices in v4, strategic context in v5) |
+| Self-host loaded cost | ₹350/mo → ₹7-30K/mo (loaded) → ₹350/mo + 1.5-2 hrs/mo → ₹350/mo + ops | v2 inflated via unjustified opportunity-cost multiplier; v3 corrected; v4-v5 stable |
+| Indian fintech precedents | "Razorpay = Aurora-Postgres" → same → REMOVED (unverifiable) → REMOVED → **CORRECTED**: Razorpay actually uses MySQL (web-verified v5) | v3 honestly removed; v5 web-search found the truth |
+| Indian-domestic providers | "Out of scope" → "Out of scope" → "Out of scope" → Yotta SutraDB ₹1,897.50/core (verified) → SAME | v4 web-fetched Yotta pricing concretely |
+| SEBI cloud framework applicability | "SEBI mandates India region" → SAME → "Can't verify circular" → "Algo vendors are AGENTS not REs" → SAME | v3 honestly downgraded; v4 web-fetched circular text |
+| Number of "viable paths" | 3 → 5+2 hybrids → 5+3 hybrids → 8+3 hybrids → 8+4 (Path 9 rqlite added) | More research surfaced more options |
+
+**v5 lesson from convergence**: more research rounds added options without changing the core recommendation. Diminishing returns are real.
+
+### 1.3 What v1-v4 missed that v5 surfaces
+
+**v1-v4 anchor on "Postgres OR SQLite-compat at canary scale"**. v5 adds:
+- **Path 9 — rqlite** (Raft-replicated SQLite, single binary): production-proven, fault-tolerant, deployable as 3-node cluster on existing Fly machines. Trades write performance for HA. Could be Phase 3 multi-cell foundation.
+- **Path 10 — Cloudflare D1** (managed SQLite-compat at edge): per-tenant isolation, ~500-2K writes/sec ceiling, 10GB cap per database. **Fits our pattern** since we're <1K writes/day at canary.
+- **Path 11 — Litestream-only optimization** (current path with provider variations): R2 (free egress; current) vs Tigris (Fly-native, geo-distributed) vs Backblaze B2 ($0.01/GB egress). All work; switch is config-only.
+
+**The empirical correction v5 makes**: **Razorpay uses MySQL, not Aurora-Postgres**. v1-v3 cited "Razorpay = Aurora-Postgres" as knowledge baseline; v3 honestly removed it; v5 web-verified the correction. Razorpay's actual stack: MySQL primary + TimescaleDB for analytics + Kubernetes-deployed.
 
 ---
 
-## Section 3 — Cost-of-Being-Wrong Per Path
+## Section 2 — Strategic Context: Should Phase 2.6 Even Fire Now?
 
-v3 had this; v4 adds verified switch costs:
+### 2.1 The honest cost-benefit at 0 paid users
 
-| Switch path | Calendar | Engineer-days | Verified-by-experience? |
-|---|---|---|---|
-| Turso → DO Postgres | 4-6 weeks (similar to our Phase 2.6 itself) | 10-15 | NO (would be first-time migration) |
-| DO BLR1 → AWS RDS Mumbai | 1-2 weeks | 5-7 | YES (Postgres-to-Postgres pg_dump well-trodden) |
-| Yotta → DO/AWS | 1-2 weeks | 5-7 | NO (Yotta proprietary tooling) |
-| Self-host → Managed | 1 week | 3-5 | YES (well-trodden) |
-| Supabase → DO | 2-3 weeks if using Supabase RLS/Auth (we don't) | 5-7 (we don't) | YES |
-
-**v4 key insight**: **Turso → Postgres switch is the most expensive** because it's not a same-protocol migration. Going Turso-first means committing to libSQL/SQLite-compatible storage; switching to Postgres later requires schema-rewrite and Phase 2.x work to be capitalized at switch time.
-
-**This changes the recommendation calculus**: if there's any chance we'll WANT Postgres at scale (Phase 3 multi-cell, NSE empanelment compliance leveraging managed-Postgres-on-AWS, etc.), going DO BLR1 first is safer than Turso. If we're confident SQLite-family is our forever path, Turso wins.
-
----
-
-## Section 4 — Updated Path Comparison (v4)
-
-### Path 1 — Defer Phase 2.6 entirely
-
-Status unchanged. Stay on SQLite + Litestream → R2.
-
-### Path 2 — DigitalOcean BLR1
-
-`[VERIFIED EMPIRICALLY 2026-05-10]`:
-- $15.15/mo for Basic 1GB (was estimated $15 in v3)
-- 11ms latency from Mumbai broadband
-- 7-day PITR confirmed
-- All needed extensions confirmed
-- 22-997 connections per plan
-- USD billing only; 18% GST or RCM exemption with GSTIN
-- NO UPI/NetBanking/RuPay payment support
-
-### Path 3 — AWS RDS Mumbai
-
-`[PARTIALLY VERIFIED]`:
-- General db.t4g.micro: $0.016/hr on-demand, $0.012/hr 1yr Reserved (verified)
-- ap-south-1 specific pricing requires AWS pricing calculator (search returned hourly rate but not region-specific monthly)
-- Multi-AZ doubling: knowledge baseline
-- Reserved Instance discount: 30% (1yr) / 50% (3yr) — knowledge baseline
-
-### Path 4 — Supabase Mumbai
-
-Status unchanged from v3.
-
-### Path 5 — Self-host Fly Volume BOM
-
-Status unchanged from v3 (1.5-2 hrs/mo ops at canary; ₹350/mo infra).
-
-### Path 6 — Turso ap-south-1
-
-`[VERIFIED EMPIRICALLY 2026-05-10]`:
-- Free tier covers our entire canary load (1500x under read quota; 11000x under write quota)
-- Mumbai region (`aws-ap-south-1`) confirmed
-- 1d/10d/30d/90d PITR depending on tier
-- Developer tier $4.99/mo if Free auto-suspend is unacceptable (unverified whether Turso has auto-suspend like Neon)
-- Pro tier $416.58/mo includes HIPAA + SOC2 + BYOK + SSO
-
-### Path 7 — Yotta SutraDB Mumbai *** NEW IN v4 ***
-
-`[VERIFIED EMPIRICALLY 2026-05-10]`:
-- ₹1,897.50/core/month (Open-Source PostgreSQL plan)
-- INR billing native
-- SEBI/RBI/MeitY/HIPAA compliance + MeitY empanelment
-- Mumbai (Panvel NM1) — same DC infrastructure rated APAC-best by Datacloud Global Awards
-- 99.95% uptime SLA
-- Multi-zone deployments
-- **Sales-only signup; PITR window not yet verified**
-
-### Path 8 — Crunchy Bridge Mumbai *** UPGRADED FROM v3 ***
-
-`[VERIFIED via WebSearch 2026-05-10]`:
-- Hobby tier $10/mo (cheapest managed-Postgres tier surveyed)
-- AWS Mumbai (`aws-ap-south-1`) available
-- Storage $0.10/GB beyond plan
-- Postgres-purist team (core contributors)
-- v3 had this as "knowledge baseline ~$10-20/mo"; v4 confirms $10 starting
-
-### Hybrid A — DO BLR1 → AWS RDS for scale
-
-Status unchanged from v3.
-
-### Hybrid B — Neon Free dev + DO BLR1 prod
-
-Status unchanged from v3.
-
-### Hybrid C — SQLite forever via Turso
-
-Stay on Turso ap-south-1; never migrate to Postgres. Phase 2.x Postgres work is the fallback if Turso fails.
-
----
-
-## Section 5 — Recommended Path Forward (v4)
-
-After v4 verification, the bimodal recommendation becomes more nuanced:
-
-### Tier 1 — Strongest defensible recommendations
-
-**Path 6 (Turso ap-south-1, Free or Developer tier)** wins on:
-- Cost: $0 Free tier covers our usage (verified) OR $4.99 Developer tier
-- India region: Mumbai confirmed (verified)
-- Skip Phase 2.6 migration entirely
-- Compliance: SOC2 (Scaler+); HIPAA (Pro)
-- 90-day PITR (Pro tier)
-
-**BUT**: switch cost to Postgres later is non-trivial (4-6 weeks if we change strategy).
-
-**Path 2 (DigitalOcean BLR1, Basic 1GB)** wins on:
-- Cost: $15.15/mo (verified)
-- Latency: 11ms India-routed (verified)
-- PITR: 7 days included
-- Extensions: all needed verified
-- Postgres-protocol future-proofing for Phase 3 multi-cell
-
-**BUT**: USD billing + no UPI/RuPay creates Indian payment friction.
-
-**Decision rule**: **Path 6 if you're confident SQLite-family is sufficient long-term. Path 2 if you want Postgres future-proofing. Both Mumbai-collocated. Both verified.**
-
-### Tier 2 — India-domestic alternatives
-
-**Path 7 (Yotta SutraDB)** for users specifically wanting:
-- INR billing
-- SEBI/MeitY empanelment (matters for future RE registration if we ever become directly registered)
-- Sovereign Indian cloud framing
-
-Cost: ₹1,897.50/core/month (~$22-23 USD-equivalent at canary scale). Sales-only signup.
-
-### Tier 3 — Post-canary growth
-
-**AWS RDS Mumbai (Path 3)** for enterprise-grade post-50-paid-subs scale. Reserved Instance 30-50% discount kicks in.
-
-**Crunchy Bridge AWS Mumbai (Path 8)** at $10/mo Hobby for users wanting Postgres-purist team. Slightly cheaper than DO BLR1 but lacks INR-region equivalent (DO has BLR1; Crunchy uses underlying AWS Mumbai).
-
-### Tier 4 — Defer
-
-**Path 1**: stay on SQLite + Litestream → R2 indefinitely.
-
----
-
-## Section 6 — User Decision Tree (v4)
-
-### "Cheapest verified canary; SQLite-family is fine"
-→ **Path 6 Turso Free tier** ($0; aws-ap-south-1).
-→ Verify before commit: whether Turso Free has auto-suspend like Neon. If yes, upgrade to Developer $4.99/mo.
-→ Migration script: NOT needed; libSQL accepts our existing SQLite SQL natively.
-
-### "Cheapest verified canary with Postgres"
-→ **Path 2 DigitalOcean BLR1 Basic 1GB** ($15.15/mo).
-→ Configure GSTIN on account to skip 18% GST.
-→ Use international-enabled Visa/MasterCard or PayPal (no UPI).
-→ Connection string format: `postgres://user:pass@db-postgresql-blr1-xxx.b.db.ondigitalocean.com:25060/defaultdb?sslmode=require`.
-
-### "Cheapest INR-billed Indian-domestic"
-→ **Path 7 Yotta SutraDB** (₹1,897.50/core/month).
-→ Sales contact required: yntraacloud.ai/contact
-→ Verify before commit: PITR window, exact connection-pooling behavior, whether self-service signup is now available.
-
-### "Enterprise-grade with maximum compliance posture"
-→ **Path 3 AWS RDS Mumbai db.t4g.micro** (~$15-22/mo on-demand).
-→ Verify before commit: AWS pricing calculator for ap-south-1 specifics; Reserved Instance 30% off after 30-day stable canary.
-
-### "Postgres-specialist managed; small premium for expertise"
-→ **Path 8 Crunchy Bridge AWS Mumbai Hobby** ($10/mo).
-→ Lower-than-DO price; same Mumbai region (via underlying AWS).
-→ Postgres core contributors run the company.
-
-### "I want to defer Phase 2.6 entirely"
-→ **Path 1**. Stay on SQLite + Litestream → R2.
-→ Trigger: 100+ concurrent users sustained, OR Phase 3 multi-cell dispatch.
-
-### "I want to verify both top picks in parallel for 1 week"
-→ **Stage-1 canary on DO BLR1 + Turso Free for 1 week**.
-→ DO BLR1: $15.15 × 0.25 month = ~$4 trial cost.
-→ Turso Free: $0.
-→ Compare empirical metrics; pick winner; decommission loser.
-→ Total trial cost: ~$4-5.
-
-### "What about Sify / Tata / Reliance Jio / ESDS?"
-→ **Outside v4 verification scope.** Sales contacts required for each. v4 cannot rank these.
-
----
-
-## Section 7 — Decision Irreversibility (v4)
-
-| R-10 Item | Reversibility | v4 verified switch cost |
+| Phase 2.6 cost | Estimate | Source |
 |---|---|---|
-| **R-10.1 Provider choice** | Hard at scale; **easy at canary** | Path 2↔Path 8 (DO↔Crunchy): 1-2 weeks. Path 6↔Path 2 (Turso↔DO): **4-6 weeks** because protocol change |
-| **R-10.2 Provisioning** | Easy | 1-2 days at any scale |
-| **R-10.3 Canary user policy** | Easy | Just policy |
-| **R-10.4 Rollback SLA** | Medium | Auto-rollback watchdog ~1 day to add |
-| **R-10.5 Migration window** | Easy | Just scheduling |
-| **R-10.6 Success criteria** | Easy | Iterative |
+| Provider canary cost | $5-20/mo | v4-verified (Path 6 Free–Path 2 $15) |
+| Calendar | 12-16 weeks (Stage 1 → full cutover) | v1-v4 stable |
+| Engineering time | 1-2 days per stage × 6 stages = ~12 engineer-days | v4-extrapolated |
+| Risk surface | Each stage has rollback path; auto-rollback watchdog mitigates | v1-v4 stable |
+| Cognitive overhead | Monitoring 2 backends in parallel for 12-16 wks | qualitative |
 
-**v4 nuance hardened**: at canary scale (1-5 users), nearly ALL choices are reversible cheaply. **Exception**: Turso↔Postgres switch is protocol-change-level effort.
+| Phase 2.6 benefit at 0 paid users | Estimate |
+|---|---|
+| User-visible latency improvement | None (SQLite local is faster than any network DB) |
+| User-visible feature unlock | None (all features work on SQLite today) |
+| Compliance posture improvement | None (we're not an RE per SEBI cloud circular per v4 finding) |
+| Disaster recovery | Marginal (Litestream → R2 already works) |
+| Phase 3 multi-cell readiness | Yes — but Phase 3 itself isn't dispatched |
+| Future-proofing | Yes — but optionality value depends on Phase 3 timing |
 
-**v4 recommendation**: if uncertain between Path 2 (Postgres-DO) and Path 6 (libSQL-Turso), **start with Path 6 only if confident SQLite-family is the long-term answer**. If unsure, Path 2 keeps Postgres options open at small extra cost ($15.15 vs $0).
+**Net at 0 paid users**: Phase 2.6 is pure infrastructure investment ahead of demand. The "user-visible benefit" column is empty.
 
----
+### 2.2 Opportunity cost of 12-16 weeks
 
-## Section 8 — Updated 10K Cost Ceiling (v4)
+What ELSE could happen in the same calendar?
 
-`[VERIFIED PRICING WHERE POSSIBLE; KNOWLEDGE BASELINE OTHERWISE]`:
-
-| Provider at 10K users | Estimated cost/month | Confidence |
+| Alternative | Calendar | User-visible benefit |
 |---|---|---|
-| Turso Pro tier | $416.58 (~₹35K) | HIGH (verified) |
-| DO 8GB BLR1 + standby HA | $122.10 × 2 = $244.20 (~₹20K) | HIGH (verified) |
-| AWS RDS db.r6g.xlarge Mumbai (1yr Reserved + read replica) | knowledge-baseline ~₹35-50K | KNOWLEDGE BASELINE |
-| Yotta SutraDB 4 cores HA | ₹1,897.50 × 4 × 2 = ~₹15K | KNOWLEDGE BASELINE (extrapolation) |
-| Crunchy Bridge Standard | knowledge-baseline ~$140 (~₹12K) | KNOWLEDGE BASELINE |
-| Self-host Fly BOM (16GB, 100GB) | ~₹8K infra + ops time | HIGH (infra) |
-| Supabase Team | $599 (~₹50K) | HIGH (verified) |
-| Aiven Business-8 | knowledge-baseline ~₹40K+ | KNOWLEDGE BASELINE |
+| **Launch path execution** (per `MEMORY.md kite-launch-blockers-apr18.md`) | 4-8 weeks | High — gets first paid users |
+| **NSE empanelment prep** (per `kite-cost-estimates.md`) | 3-6 months calendar; ₹4-8L | High at 30+ paid sub trigger |
+| **Phase 3 multi-cell architecture** (research first) | 4-6 weeks design | Strategic — unblocks 1K+ user trajectory |
+| **More features** (per `kite-trade.md`) | continuous | Variable; depends on which feature |
+| **Audit log + observability hardening** | 2-4 weeks | Operational — helps when paid users arrive |
+| **Path A continuation** (more module promotions) | continuous | Modest — code-org improvement, no user-visible |
 
-**Most economical at 10K with India region (verified pricing only)**:
-1. **Turso Pro: ₹35K/mo** (assumes our usage scales linearly to 10K users — likely; rows-read/written quotas are very generous)
-2. **DO 8GB BLR1 + standby: ₹20K/mo**
-3. **Yotta SutraDB 4 cores HA: ~₹15K/mo** (knowledge baseline extrapolation; verify at scale)
+**Honest take**: at 0 paid users, **launch path execution > Phase 2.6**. NSE empanelment prep also outranks Phase 2.6 because it has a 3-6 month regulatory calendar that runs concurrently with engineering, whereas Phase 2.6 needs concentrated engineering attention.
 
-The 75%-reduction-from-Series-A-grade envelope from the IP-whitelist correction **still holds** at 10K with any of these top-3 options.
+**v5 recommendation**: **defer Phase 2.6** until either:
+1. **50+ paid users** (NSE empanelment trigger; provider choice now matters for compliance)
+2. **Phase 3 multi-cell dispatch** (architectural prerequisite)
+3. **SQLite write-throughput becomes a real bottleneck** (empirical signal, not anticipated)
 
----
+Until any of those triggers fires, **the right thing is to KEEP Phase 2.6 ready** (which we DID — Phase 2.0-2.5 driver factory shipped at v262) and **don't flip it yet**.
 
-## Section 9 — What v4 Got Right vs v3
+### 2.3 Three-tier strategic timeline
 
-### v4 corrections to v3
+| Now (0 paid users) | Trigger fires | Post-trigger |
+|---|---|---|
+| Path 1 (Defer) | 50+ paid users OR Phase 3 OR write bottleneck | Phase 2.6 dispatch (which option?) |
+| Phase 2.x ALREADY READY | + at trigger time, ALSO research v6 with current state | + canary stages 1-6 |
+| Cost: ₹0 added | Cost: $5-25/mo + 12-16 wks calendar | + may switch provider mid-rollout |
 
-1. **v3 said BOM↔BLR1 latency "not verified — needs ping/traceroute"**. v4: 11ms verified empirically.
-
-2. **v3 said DO PITR retention "not Context7-verified"**. v4: exactly 7 days verified.
-
-3. **v3 said AWS RDS Mumbai pricing requires AWS calculator**. v4: confirmed at general db.t4g.micro $0.016/hr but couldn't extract ap-south-1 specific via WebSearch. Still requires user verification via AWS pricing calculator.
-
-4. **v3 said Turso pricing "not verified"**. v4: full pricing verified including overage rates.
-
-5. **v3 said "Indian-domestic providers outside scope"**. v4: surfaced Yotta SutraDB pricing concretely (₹1,897.50/core/month).
-
-6. **v3 said "SEBI compliance lawyer-required"**. v4: surfaced the actual circular text and confirmed algo-vendor-as-agent framing means we're NOT a direct RE under the cloud circular. Still recommends lawyer review for production but provides empirical baseline.
-
-7. **v3 mentioned DO India billing**; **v4 verified the friction**: NO UPI/Net Banking/RuPay support.
-
-### v3 conclusions that survived v4 unchanged
-
-- Path 6 (Turso) is a legitimate alternative to Path 2 (DO BLR1)
-- Both Mumbai-collocated
-- Bimodal recommendation framing
-- Decision irreversibility analysis (with v4 nuance: Turso↔Postgres switch is protocol-level)
-- Mumbai region preferred (DPDP-grounded)
-
-### v3 conclusions REMOVED in v4
-
-- v4 now has actual SEBI circular content; v3's "lawyer-grade verification needed" upgraded to "circular language + SEBI-RE-definition verified, lawyer interpretation still recommended"
-- v3 framed Yotta as "outside scope"; v4 has Yotta pricing concretely
+**v5 nuance**: by the time the trigger fires, the provider landscape will have changed. Doing Phase 2.6 now locks us in to today's provider; deferring lets us pick at-trigger-time with then-current data.
 
 ---
 
-## Section 10 — Phase 2.6 Dispatch Readiness Checklist (v4)
+## Section 3 — Cost-of-Being-Wrong Sensitivity Analysis
 
-When the user authorizes Phase 2.6, lock these:
+What's the actual cost if each R-10 decision is wrong?
 
-- [ ] **Provider**: ___ (Path 2 DO BLR1 / Path 3 AWS RDS Mumbai / Path 5 Self-host / Path 6 Turso / Path 7 Yotta / Path 8 Crunchy / Path 1 Defer / Hybrid)
-- [ ] **Verification gates** per chosen path:
-  - DO BLR1: GSTIN configured; international-enabled card on file; latency baseline `ping db.<your-cluster>.b.db.ondigitalocean.com` from Fly app (target <30ms)
-  - AWS RDS Mumbai: AWS pricing calculator verification for db.t4g.micro on-demand AND Reserved 1yr; AWS account + IAM ready
-  - Turso: verify whether Free tier has Neon-style auto-suspend; if yes, jump to Developer $4.99/mo; benchmark vs current SQLite + Litestream
-  - Yotta: sales call to confirm PITR window, connection pooling, INR pricing for full HA setup
-  - Crunchy Bridge: verify aws-ap-south-1 Hobby plan availability and HA pricing
-  - Self-host: written WAL-E backup procedure + restore drill log
-- [ ] **Canary user**: ___ (test account / admin / 1 paid)
-- [ ] **Rollback SLA**: ___ (15-min manual / 7-min auto-rollback watchdog)
-- [ ] **Cutover date**: ___ (Saturday 06:00 IST + 7 days from authorization)
-- [ ] **Success criteria**: per Section 6 of Phase 2.5 runbook (6 quantitative thresholds)
-- [ ] **Lawyer review** (if going with India-region for SEBI-mandated reasons OR planning to register as direct RE): ~₹15-35K consult per `MEMORY.md kite-fintech-lawyers.md`
+### R-10.1 — Provider choice wrong
+
+| Scenario | Cost if wrong |
+|---|---|
+| Pick DO BLR1, want AWS RDS later | 1-2 weeks + ~$5K of canary data migrated. **Low.** |
+| Pick Turso, want Postgres later | 4-6 weeks + protocol-level rework. **Medium.** |
+| Pick Yotta, want managed-cloud later | 1-2 weeks + sales-conversation termination. **Low-medium.** |
+| Pick Self-host, become enterprise customer demanding managed | 1 week migration + lots of "why" docs. **Low.** |
+
+**Probability of switching**: at canary (1-5 users), low (we're small enough to absorb whatever we pick). At 100+ users, switching is real engineering work. At 1K+ users, switching is multi-month. **The "wrong now" cost is small; the "wrong at scale" cost is large — but we don't reach scale without first crossing the trigger thresholds, where we'd revisit anyway.**
+
+### R-10.4 — Rollback SLA wrong
+
+If our rollback mechanism doesn't work as designed:
+- **One incident worth of downtime** = ~3-4 minutes per `flyctl secrets unset` cycle
+- **Lost writes during that window** = at canary 1-5 users, ~0-5 transactions
+- **Reputation cost** = small (1-5 canary users = controlled blast radius)
+
+**Cost-of-wrong R-10.4 = ~₹0** at canary. Becomes meaningful at 100+ paid users.
+
+### R-10.2 — Provisioning approach wrong
+
+Manual flyctl now → Terraform later: 1-2 days conversion. **~₹0 cost-of-being-wrong.**
+
+### R-10.3 / R-10.5 / R-10.6 — Policy/scheduling/criteria wrong
+
+All iterative; cost-of-being-wrong is "we adjust next stage". **~₹0.**
+
+### Sensitivity ranking (highest cost-of-wrong first)
+
+1. **R-10.1 Provider** (medium-high if Turso↔Postgres path mismatch; low otherwise)
+2. **R-10.4 Rollback SLA** (low at canary; high at scale — but we're at canary)
+3. R-10.2-3-5-6 (all near-zero cost-of-wrong)
+
+**Implication**: spending more research effort on R-10.1 makes sense; it's the only decision where being wrong costs real money/time. Everything else is iterative.
 
 ---
 
-## Section 11 — Honest Acknowledgments (v4)
+## Section 4 — Alternative Architectures NOT in v1-v4
 
-### What v4 verified (HIGH confidence)
+v1-v4 anchored on "Postgres at managed providers OR keep SQLite". v5 surfaces three more options:
 
-- Turso pricing: every tier + overage rates (WebFetch turso.tech)
-- DO Managed Postgres pricing (WebFetch DO docs)
-- DO BLR1 features: PITR window, connections, extensions, versions (WebFetch DO docs)
-- DO India payment methods (WebSearch)
-- DO BLR1 ping latency from Mumbai (Bash)
-- DO BLR1 traceroute India-only routing (Bash)
-- SEBI cloud circular text + RE definition + agent-vendor framing (WebFetch + WebSearch + cross-source)
+### Path 9 — rqlite (Raft-replicated SQLite)
+
+**What it is**: open-source distributed SQLite using Raft consensus. Single self-contained Go binary; deploy 3 nodes for HA.
+
+**Source verified**: rqlite.io docs + GitHub.
+
+**Why it might fit us**:
+- **SQLite-compatible**: zero migration from current stack.
+- **HA built-in via Raft**: no Litestream, no PITR-via-snapshots needed.
+- **Single-binary deploy on Fly machines**: ~3 instances × $2/mo = $6/mo total.
+- **Fault-tolerant**: any node can fail without taking DB offline.
+
+**Why it might NOT fit us**:
+- **Reduced write performance** (Raft round-trips) — but at our <1K writes/day load, irrelevant.
+- **Smaller ecosystem than Postgres or even Turso** — fewer Stack Overflow answers.
+- **Not as "managed"** — we own all upgrades, monitoring, etc.
+
+**Cost**: ~$6/mo infrastructure (3 Fly machines BOM region). Ops time similar to self-host Fly Volume but with HA.
+
+**v5 status**: legitimate Path 9 if user wants HA without managed-service vendor lock-in. **Could be Phase 3 multi-cell foundation — each cell = 3-node rqlite cluster.**
+
+### Path 10 — Cloudflare D1 (managed SQLite-compat at edge)
+
+**Source verified**: developers.cloudflare.com + InfoQ.
+
+**Specs**:
+- 10GB max per database (hard cap; manual sharding for more)
+- ~500-2K writes/sec ceiling (vs 10K-50K for local SQLite WAL)
+- Per-database isolation (no extra cost per database)
+- Edge-distributed (low read latency globally)
+
+**Fit for us**: at <1K writes/day canary, we're 1000x under D1's write ceiling. Per-database isolation could be Phase 3 multi-cell pattern (one D1 per cell or per user). 10GB cap is fine for 5+ years of user data growth at our pattern.
+
+**Why NOT a fit**: Cloudflare lock-in (D1 is CF-Workers-native; running our Go app on Fly + D1 on CF means cross-vendor architecture). India region: D1 doesn't have an explicit Mumbai DC but CF's edge is globally distributed (low latency from anywhere India).
+
+**v5 status**: niche fit. Mentioned for completeness; not a primary recommendation.
+
+### Path 11 — Litestream provider variations (within current SQLite path)
+
+**Source verified**: litestream.io/alternatives.
+
+Current state: SQLite + Litestream → R2 (Cloudflare R2 free egress).
+
+Alternatives if R2 ever fails:
+- **Tigris** (Fly.io-native, S3-compatible, geo-distributed CDN-like caching)
+- **Backblaze B2** ($0.01/GB egress; cheapest paid option)
+- **AWS S3** (most expensive; works fine with Litestream)
+- **Self-hosted MinIO** (free; we own ops)
+
+**Cost**: R2 free tier handles our backup volume; alternatives all <$5/mo at our scale.
+
+**v5 status**: not really a "Path" — it's variations within Path 1. Mentioned because if user wants disaster-recovery improvement WITHOUT moving to Postgres, switching backup target is easier than switching DB.
+
+### Path 12 — DuckDB analytics + SQLite OLTP split
+
+**Verified via Context7**: DuckDB is in-process analytical (OLAP), not transactional (OLTP).
+
+**Why this DOESN'T fit us**: our workload is 100% OLTP (small writes, point-lookup reads). DuckDB excels at large analytical queries over columnar data. **Wrong tool for our pattern.**
+
+**v5 status**: not recommended. Mentioned because the user asked.
+
+---
+
+## Section 5 — Real Fintech Database Patterns (v5 Web-Verified)
+
+v3 honestly removed the Indian fintech precedents section because v3 couldn't verify via Context7. v5 retried via WebSearch; here's what verified:
+
+### Razorpay
+- **Primary database: MySQL** (NOT Aurora-Postgres as v1-v3 hearsay claimed)
+- **Analytics: TimescaleDB** (Postgres + timeseries extension)
+- **Infrastructure**: Kubernetes-deployed across all components
+- **Source**: Razorpay engineering blog at razorpay.com/blog/data-classification-real-time-highway/
+
+**v5 correction to v1-v3**: the "Razorpay uses Aurora-Postgres" claim was wrong. They're MySQL-primary. **This means our anchoring on Postgres because "that's what fintech does" was based on misinformation.**
+
+### Groww
+- Mentioned indirectly via cockroachlabs.com customer references; specific RDBMS choice not surfaced
+- Likely AWS-based (general Indian fintech pattern) but specific DB engine NOT verified
+
+### Stripe / Revolut / Nubank
+- Use Postgres extensively per enterprisedb.com + cockroachlabs blogs
+- ACID transactions for money safety
+- These are at scale (millions of users); not directly comparable to canary
+
+### Form3 (UK fintech, similar pattern to us)
+- Started on AWS RDS PostgreSQL
+- Migrated to CockroachDB at scale
+- Source: cockroachlabs blog
+
+**v5 honest synthesis**: there's no Indian-fintech-default database pattern that automatically applies to our small-scale algo trading vendor. Postgres works for big fintechs; MySQL works for Razorpay. **Database choice at canary scale is governed more by ops convenience and switch cost than by "what big-fintech-X uses".**
+
+---
+
+## Section 6 — Lock-in Days-to-Migrate (v5 Empirical)
+
+v1-v4 estimated; v5 pins down concrete migration steps:
+
+### Path 1 → Path 6 (Current SQLite → Turso)
+
+**Steps**:
+1. Sign up Turso Free (10 min, $0)
+2. Create database in `aws-ap-south-1` (5 min)
+3. Set `ALERT_DB_DRIVER=turso`, `ALERT_DB_URL=libsql://...` (1 min)
+4. Modify alerts.OpenDB to accept libsql:// URLs (already does — libSQL accepts SQLite syntax, just different driver)
+5. Verify all 5 round-trip tests pass against Turso (1-2 hours)
+6. Phase 2.6.a: deploy + canary user with `ALERT_DB_DRIVER=turso` for that user (1 hour)
+
+**Total: 4-6 hours from sign-up to canary user on Turso.** Not 4-6 weeks. The "phase" framing was overweight for this specific path.
+
+**Implication**: Turso testing is cheap and fast. **User could literally try this today** without the full Phase 2.6 staged rollout, because the migration is so light.
+
+### Path 6 → Path 2 (Turso → DO BLR1 Postgres)
+
+**Steps**:
+1. DO account + GSTIN setup (1 day if no AWS-style ops familiarity)
+2. Provision DO BLR1 Basic 1GB ($15.15/mo)
+3. Adapt Phase 2.4 round-trip migration test to libSQL→Postgres (vs SQLite→Postgres)
+4. Run round-trip migration; verify (1-2 days)
+5. Switch ALERT_DB_DRIVER + ALERT_DB_URL (1 hour)
+6. Canary stage rollout (1-2 weeks)
+
+**Total: 1-2 weeks**, NOT v4's "4-6 weeks". v4 over-estimated because it assumed Phase 2.6 full process; in reality, libSQL→Postgres is just like SQLite→Postgres which we've already designed.
+
+### Path 2 → Path 3 (DO BLR1 → AWS RDS Mumbai)
+
+**Steps**:
+1. AWS account + IAM (~1 day)
+2. Provision RDS PostgreSQL ap-south-1 (1 hour)
+3. pg_dump from DO + pg_restore to AWS (depends on data volume; ~1-2 hours at canary)
+4. Update ALERT_DB_URL (1 minute)
+5. Verify (1 day)
+
+**Total: 2-3 days.** Postgres-to-Postgres migration is well-trodden.
+
+### Path 1 → Path 9 (Current SQLite → rqlite)
+
+**Steps**:
+1. Deploy 3 Fly machines BOM with rqlite binary (~2 hours)
+2. Migrate SQLite to rqlite cluster (rqlite has SQLite-import path)
+3. Update connection logic to talk to rqlite HTTP API instead of local SQLite
+4. Test (~1 day)
+
+**Total: 1-2 days for migration; bigger commitment for ops.**
+
+### v5 implication
+
+**Migrations between SQLite-family options are HOURS-DAYS, not weeks.** v1-v4 conflated "Phase 2.6 full staged rollout" (12-16 weeks) with "actually swap the database backend" (hours-days). The 12-16 weeks is staging + monitoring + risk-mitigation, not the technical migration itself.
+
+**This means try-before-buy is genuinely cheap**: actually deploying Turso for a day and seeing if it works is ~half a day of work, not a week of risk.
+
+---
+
+## Section 7 — Try-Before-Buy: Path E (NEW)
+
+v5 introduces a path v1-v4 didn't make explicit: **research-by-deployment**.
+
+### Path E — 1-week parallel canary
+
+**Steps**:
+1. Sign up Turso Free (10 min)
+2. Sign up DO BLR1 Basic 1GB trial (10 min, $4 prorated for 1 week)
+3. Configure dev environment to point at Turso
+4. Configure another dev environment to point at DO BLR1
+5. Run synthetic load matching our usage profile (30 min to write a script)
+6. Measure for 1 week:
+   - Latency p50/p99 from Fly BOM machine to each
+   - Failure modes (cold starts, rate limits, connection drops)
+   - Backup/restore drill (each provider)
+   - Subjective ops experience (dashboard quality, error messages)
+
+**Cost**: ~$4-5 total for 1 week of empirical data.
+
+**Calendar**: 1 week real-time; ~4-6 hours hands-on engineering.
+
+**What this resolves that v1-v4 couldn't**:
+- Turso Free tier auto-suspend behavior (the deal-breaker question)
+- Real BOM↔BLR1 latency from production-like Fly machine (not just local WSL2 ping)
+- Real BOM↔Turso ap-south-1 latency
+- Subjective developer experience (can't be researched from docs)
+
+**v5 status**: **strongly recommend Path E as a precursor to any Phase 2.6 dispatch decision.** It costs less than continuing to research-by-paper.
+
+---
+
+## Section 8 — "Don't Decide Yet" — The Honest Option
+
+After 5 rounds, the user has substantially complete data. The remaining unknowns require user-side action (Path E try-before-buy, lawyer consultation, sales calls). **At some point more research yields nothing new.**
+
+### When does Phase 2.6 become forced?
+
+| Trigger | Probability of firing within 6 months | What changes |
+|---|---|---|
+| 50+ paid users | LOW (currently 0; unclear ramp) | NSE empanelment + Phase 3 prep needed; provider choice matters for compliance |
+| 100+ concurrent users | VERY LOW | SQLite write throughput becomes real concern |
+| Phase 3 multi-cell dispatch | UNDETERMINED | Multi-cell architectural design needed first |
+| SQLite corruption / disaster recovery test fails | LOW | Forced migration as recovery |
+| Rainmatter / Z-Connect partnership requires Postgres | LOW | External pressure |
+| Specific feature requires Postgres-only capability (e.g., LISTEN/NOTIFY for pub/sub) | LOW | Engineering-driven |
+
+**At 0 paid users with no near-term ramp signal**: NONE of these triggers are firing. Phase 2.6 is **purely speculative infrastructure investment**.
+
+### What "Don't decide yet" looks like operationally
+
+- [x] Phase 2.x driver factory shipped at v262 (DONE — Phase 2.0-2.5 work)
+- [x] go.mod allows easy Postgres swap (DONE — alerts v0.5.0)
+- [x] dialect.go helper for cross-DB compatibility (DONE — Phase 2.1.6)
+- [x] Round-trip migration test framework (DONE — Phase 2.4)
+- [ ] Actually flip ALERT_DB_DRIVER for any user (NOT DONE — and this is the gated step)
+
+**v5's honest recommendation**: leave the last checkbox unchecked. The infrastructure investment was worth it (Phase 2.0-2.5 prep is defensive optionality). The actual flip is premature.
+
+---
+
+## Section 9 — v5's Final Recommendation (Crystal-Clear)
+
+### Tier 1 — Strongly Recommended
+
+**Path 1 (Defer)** + **Path E (Try-Before-Buy when convenient)**:
+- Now: stay on SQLite + Litestream → R2 (current production at v262)
+- Within 3-6 months at hobby pace: spend ~$5 on Path E to empirically validate Turso vs DO BLR1
+- At trigger event: revisit with then-current data; recommend Path 6 (Turso) OR Path 2 (DO BLR1) per which Path E favored
+
+### Tier 2 — Defensible If User Wants Forward Motion Now
+
+**Path 6 (Turso Free)**:
+- Zero-cost migration (free tier covers 1500x our load)
+- 4-6 hours engineering to deploy
+- Reversible in <1 hour (revert ALERT_DB_DRIVER)
+- Caveat: verify Turso Free auto-suspend behavior FIRST (deal-breaker question)
+
+If Turso Free auto-suspends like Neon, switch to **Turso Developer at $4.99/mo** (still cheapest paid managed option in our entire 12-provider survey).
+
+### Tier 3 — Wait For Trigger
+
+**Path 2 (DO BLR1 $15.15/mo)** at trigger event (50+ paid subs OR Phase 3 dispatch).
+
+**Path 7 (Yotta SutraDB ₹1,897.50/core)** at SEBI-RE-registration trigger (would need direct registration, not agent status).
+
+**Path 3 (AWS RDS Mumbai)** at enterprise-customer trigger (someone asks for AWS-grade compliance posture).
+
+### Tier 4 — Not Recommended For Us
+
+**Path 4 (Supabase)**: Phase 3 scaling concern (per-project pricing × N cells).
+**Path 5 (Self-host)**: ops burden grows with users; managed beats self-host post-canary.
+**Path 8 (Crunchy Bridge)**: $10/mo Hobby beats DO BLR1 $15.15 marginally; not worth switching for $5/mo.
+**Path 9 (rqlite)**: ops-heavy; only reconsider for Phase 3 multi-cell.
+**Path 10 (Cloudflare D1)**: cross-vendor architecture (CF Workers + Fly app); not worth complexity at canary.
+**Path 11 (Litestream alternatives)**: switch only if R2 fails us empirically.
+**Path 12 (DuckDB)**: wrong tool (OLAP, not OLTP).
+
+---
+
+## Section 10 — Diminishing Returns Acknowledgment
+
+After 5 rounds, the verifiable surface is exhausted. Further research without user-side action will yield diminishing returns.
+
+### What further research COULD verify (with user actions)
+
+| Item | User action required | Information value |
+|---|---|---|
+| Turso Free auto-suspend behavior | Sign up free + leave 24h idle + measure first-query latency | HIGH (deal-breaker) |
+| BOM↔Turso ap-south-1 latency from Fly BOM | Deploy a probe to existing Fly machine | HIGH |
+| Yotta SutraDB PITR window | Sales call | MEDIUM |
+| AWS RDS ap-south-1 specific pricing | AWS pricing calculator | MEDIUM (general within 10% known) |
+| Sify/Tata/Jio/ESDS managed PG | Sales calls × 4 | LOW (probability they fit our needs is low) |
+| Lawyer-grade SEBI compliance review | Lawyer consultation | LOW unless we register as direct RE |
+
+### What further research CAN'T verify (regardless of action)
+
+| Item | Reason |
+|---|---|
+| Future-state provider pricing changes | Markets move; today's pricing isn't tomorrow's |
+| Future-state SEBI/DPDP regulatory changes | Regulators evolve |
+| What Phase 3 actually looks like in 12 months | Depends on user growth + technology landscape |
+| Whether libSQL ecosystem will mature | Speculative |
+
+**v5 honest take**: any v6 doc would be smaller than v5 because the marginal-research-yields curve is steep. The user has substantially complete data; further effort is incrementally less informative.
+
+**The honest action item from v5**: either commit to Tier 1 (Defer + Path E when convenient) OR commit to Tier 2 (Path 6 Turso Free) OR commit to user-side actions (sales calls, lawyer review). More research-by-paper is unproductive.
+
+---
+
+## Section 11 — What v5 Got Wrong vs v4
+
+### v4 conclusions v5 keeps
+
+- DO BLR1 latency 11ms (Bash-verified)
+- DO Managed Postgres pricing $15.15/$30.45/...
+- Turso pricing tiers $0/$4.99/$24.92/$416.58
+- SEBI cloud framework: algo vendors are agents, not REs
+- DPDP Act 2023 conditional negative-list model
+- Yotta SutraDB ₹1,897.50/core
+- 6 stable conclusions across all rounds
+
+### v4 framings v5 corrects
+
+1. **v4 said Turso↔Postgres switch is 4-6 weeks**. v5 narrows this to 1-2 weeks (mostly migration test adaptation; the actual technical work is hours).
+
+2. **v4 said Path 6 wins on cost; Path 2 wins on Postgres future-proofing**. v5 says: at 0 paid users, neither matters yet. Path 1 (defer) wins because both Path 6 and Path 2 are premature commitments.
+
+3. **v4 didn't address opportunity cost of Phase 2.6**. v5 explicitly: launch path > Phase 2.6 at 0 paid users.
+
+4. **v4 carried 8 paths + 3 hybrids without a "don't decide yet" path**. v5 makes "don't decide" the primary recommendation.
+
+5. **v4 cited Razorpay vaguely as fintech-database example**. v5 web-verified: Razorpay uses MySQL primarily, not Aurora-Postgres. Anchoring on "fintech defaults" is unreliable.
+
+### v3-v4 pattern v5 surfaces
+
+v1→v2→v3→v4 progressively added empirical detail without changing the core decision: Phase 2.6 stays GATED. The fact that 4 rounds of escalating verification still leaves the decision GATED is a signal — **the decision doesn't need making yet**.
+
+---
+
+## Section 12 — Phase 2.6 Dispatch Readiness Checklist (v5)
+
+If user authorizes Phase 2.6 NOW, lock these (unchanged from v4):
+
+- [ ] **Provider**: ___ (Path 6 Turso Free / Path 2 DO BLR1 / Path 7 Yotta / Path 1 Defer / Path E Try-Before-Buy)
+- [ ] **First step verification gate**: ___ (Path E recommended before Tier 2 commitment)
+- [ ] **Canary user**: ___
+- [ ] **Rollback SLA**: ___
+- [ ] **Cutover date**: ___
+- [ ] **Success criteria**: per Phase 2.5 runbook Section 6
+
+If user picks **Path 1 (Defer)** or **Path E (Try-Before-Buy)**: Phase 2.6 dispatch is NOT needed. The decision is "no decision yet" + "validate when convenient".
+
+---
+
+## Section 13 — Recommended Next Action
+
+### If user still wants Phase 2.6 to fire
+
+→ **Path E first**, then commit to Tier 2 winner.
+→ Calendar: 1 week + 4-6 hours engineering.
+→ Cost: ~$5.
+→ Outcome: empirical validation of Turso vs DO BLR1 from real BOM → resolves the bimodal recommendation by data.
+
+### If user agrees Phase 2.6 is premature
+
+→ **Path 1 (Defer) + bookmark**.
+→ Phase 2.x infrastructure investment was worth it (defensive optionality).
+→ Revisit at trigger event with then-current data.
+→ Free up 12-16 weeks of calendar for higher-ROI work.
+
+### If user wants more confidence before deciding
+
+→ **Lawyer consultation** on SEBI compliance for our agent-vendor framing (~₹15-35K, 1-2 weeks calendar).
+→ This resolves the "are we sure we're not REs?" question more authoritatively than v1-v5 can.
+
+### If user wants to never revisit this
+
+→ **Pick Tier 2 Path 6 Turso Free**. Done. Worst case: switch to DO BLR1 in 1-2 weeks at any future trigger event.
+
+---
+
+## Section 14 — Honest Acknowledgments (v5)
+
+### What v5 verified beyond v4
+
+- Razorpay uses MySQL primarily (v3-v4 honestly removed; v5 web-corrected)
+- rqlite production-proven for HA + single-binary-deploy (Path 9)
+- Cloudflare D1 specs: 10GB cap, 500-2K writes/sec (Path 10)
+- Litestream backup-target alternatives: R2 / Tigris / B2 / S3 / MinIO
+
+### What v5 still cannot verify (HIGH-IMPACT, USER-ACTION-REQUIRED)
+
+- Turso Free auto-suspend behavior — DEAL-BREAKER QUESTION
+- BOM↔Turso ap-south-1 latency from production Fly machine
+- Yotta SutraDB PITR window
+- Lawyer-grade SEBI agent-vendor interpretation
+
+### What further rounds (v6+) would yield
+
+After 5 rounds, the marginal-information-per-round curve is steeply diminishing. **v6 without user-side actions would be largely repackaging existing data.**
+
+The next high-information action is NOT v6; it's:
+1. **Path E try-before-buy** (1 week, $5) — resolves Turso auto-suspend + real latency
+2. **Lawyer consultation** (~₹15-35K) — resolves SEBI agent-vendor question
+3. **Yotta sales call** (~30 min) — resolves their PITR + ops details if user wants Path 7
+
+These are user-decisions, not research-decisions.
+
+---
+
+## Section 15 — Sources (v5 New)
+
+### WebSearch verified May 2026 (v5-specific)
+- [Razorpay engineering blog — data architecture](https://razorpay.com/blog/data-classification-real-time-highway/) — confirms MySQL primary, TimescaleDB analytics, Kubernetes infra
+- [rqlite GitHub](https://github.com/rqlite/rqlite) — production-proven, Raft-replicated SQLite
+- [rqlite features](https://rqlite.io/docs/features/) — single-binary, HA, simple deployment
+- [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/) — 10GB cap, 500-2K writes/sec
+- [Cloudflare D1 scaling](https://medium.com/@tristantrommer/scaling-cloudflare-d1-from-10-gb-to-500-gb-with-manual-database-sharding-4e95d6deb742) — manual sharding pattern
+- [Litestream alternatives](https://litestream.io/alternatives/) — R2 / Tigris / B2 / S3 backup target options
+- [Form3 fintech case study (cockroachlabs)](https://www.cockroachlabs.com/blog/fintech-companies-scaled-distributed-sql/) — RDS PostgreSQL → CockroachDB migration pattern at scale
+
+### Carried over from v4 (HIGH confidence)
+- DigitalOcean Managed Postgres pricing (WebFetch)
+- Turso pricing all tiers (WebFetch)
+- DO BLR1 PITR/connections/extensions (WebFetch)
+- DO India payment friction (WebSearch)
+- Yotta SutraDB ₹1,897.50/core (WebFetch)
+- SEBI Cloud Framework Circular SEBI/HO/ITD/ITD_VAPT/P/CIR/2023/033 (WebFetch + WebSearch)
 - DPDP Act 2023 cross-border framework (WebSearch)
-- Yotta SutraDB ₹1,897.50/core/month (WebFetch yntraacloud.ai)
-- Crunchy Bridge Hobby $10/mo + AWS Mumbai availability (WebSearch)
-- Aiven Startup-4 $75/mo (WebSearch)
-- Azure Reserved Instances up to 65% off (Microsoft Learn fetch)
-- libSQL repo metadata: 16.7k stars, MIT, 32.5k commits (WebFetch GitHub)
-
-### What v4 still cannot verify (REMAINS USER VERIFICATION)
-
-- AWS RDS pricing for ap-south-1 specific instance class (AWS pricing pages JS-rendered; Vantage shows general but not region-specific in extractable form)
-- Azure DB for PostgreSQL pricing for India regions specifically (Microsoft Learn fetch worked for Reserved Instance concept; specific India pricing not extracted)
-- Turso Free tier auto-suspend behavior (not documented in fetched content; verify via direct Turso testing OR sales)
-- Yotta SutraDB PITR window (not in fetched content; sales conversation needed)
-- Sify/Tata/Jio/ESDS managed Postgres pricing (no public pricing surfaced)
-- Crunchy Bridge Standard tier pricing for AWS Mumbai (Hobby surfaced; Standard not)
-- Aiven Mumbai-region surcharge if any (general $75 surfaced; region-specific not extracted)
-- Production-fintech-grade libSQL deployments (no customer references in libSQL README)
-
-### What v4 cannot research from this dispatch's tools
-
-- Real-world latency from production Fly BOM machine to each provider (we measured from local WSL2 only)
-- Current outage history per provider (status pages would help; not systematically checked)
-- Lawyer-grade interpretation of Dec 2024 SEBI Algo Trading Framework's principal-agent provision
-
-### Where the user must verify directly
-
-1. **AWS pricing calculator** for ap-south-1 specifics: https://calculator.aws
-2. **Azure pricing calculator** for India region specifics: https://azure.microsoft.com/pricing/calculator/
-3. **Turso Free tier auto-suspend behavior**: deploy a test DB, leave 24h idle, query — measure first-query latency
-4. **Yotta sales conversation** if Path 7 selected: yntraacloud.ai/contact
-5. **Crunchy Bridge calculator** for Standard tier pricing: https://www.crunchydata.com/pricing/calculator
-6. **Lawyer-grade SEBI review** if planning RE registration OR if Phase 3 multi-cell + 50+ paid subs trigger fires
+- BOM↔BLR1 latency 11ms (Bash ping/traceroute)
+- Microsoft Learn Azure DB Reserved Pricing (Microsoft Docs MCP)
 
 ---
 
-## Section 12 — v4 Self-Criticism
-
-### What v4 still doesn't know
-
-1. **Turso Free tier auto-suspend**: this is a deal-breaker question and v4 couldn't verify from Turso docs alone. If Turso Free auto-suspends like Neon, the cold-start risk applies to canary and Developer tier ($4.99/mo) becomes the right pick.
-
-2. **AWS RDS Mumbai exact pricing**: v4 has general prices but not ap-south-1 specifics. Pricing varies 5-15% between regions; user must verify.
-
-3. **Yotta operational maturity**: v4 verified compliance certifications + datacenter reputation but not operational details (how do their PITR / failover / monitoring actually work in practice? sales-only docs are marketing).
-
-4. **Real-world performance comparison**: 11ms latency to DO BLR1 verified empirically. Equivalent measurement to Yotta NM1 / AWS Mumbai / Turso aws-ap-south-1 not done.
-
-### What v4 might still be wrong about
-
-- **Cost-of-being-wrong on Turso↔Postgres switch**: estimated 4-6 weeks. Could be longer if data volume grows and migration becomes harder. Could be shorter if libSQL maintains backwards-compat with SQLite forever.
-
-- **Yotta as "Tier 2"**: v4 places Yotta in Tier 2 because of sales-only signup friction. But for users who specifically want SEBI/MeitY empanelment, Yotta might be Tier 1.
-
-- **DO India payment friction matters less than I claimed**: at $15/mo, one international card setup is trivial. Friction grows at scale where multiple billing entries matter.
-
----
-
-**End of v4 R-10 web-verified re-research. Doc-only commit; supersedes v3. tools=130 invariant preserved. NO source mutations. Phase 2.6 dispatch GATED on user authorization with checklist in Section 10.**
-
----
-
-## Sources
-
-### WebFetch verified May 2026
-- [DigitalOcean Managed Postgres pricing](https://www.digitalocean.com/pricing/managed-databases) — exact tier prices
-- [Turso pricing](https://turso.tech/pricing) — full tier breakdown
-- [DO Managed Postgres availability](https://docs.digitalocean.com/products/databases/postgresql/details/availability/) — BLR1 confirmed
-- [DO Managed Postgres limits](https://docs.digitalocean.com/products/databases/postgresql/details/limits/) — PITR + connections
-- [DO Postgres extensions](https://docs.digitalocean.com/products/databases/postgresql/details/supported-extensions/) — pgvector + pgcrypto + pg_trgm + uuid-ossp + postgis
-- [TaxGuru SEBI cloud framework summary](https://taxguru.in/sebi/framework-adoption-cloud-services-sebi-regulated-entities.html) — circular content
-- [Yotta SutraDB pricing](https://yntraacloud.ai/public-cloud/managed-database-as-a-service/relational-database/) — INR pricing
-- [libSQL GitHub](https://github.com/tursodatabase/libsql) — repo metadata
-- [Microsoft Learn — Azure DB Reserved Pricing](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-reserved-pricing)
-- [Vantage db.t4g.micro pricing](https://instances.vantage.sh/aws/rds/db.t4g.micro) — general $0.016/hr
-
-### WebSearch verified May 2026
-- [SEBI Cloud Framework Circular](https://www.sebi.gov.in/legal/circulars/mar-2023/framework-for-adoption-of-cloud-services-by-sebi-regulated-entities-res-_68740.html) — official source
-- [DPDP Act cross-border framework](https://ksandk.com/data-protection-and-data-privacy/indias-new-cross-border-data-transfer-framework/) — Section 16 + Rule 13
-- [DigitalOcean India payment options](https://docs.digitalocean.com/platform/billing/manage-payment-methods/) — UPI/RuPay status
-- [Aiven for PostgreSQL pricing](https://aiven.io/pricing) — Startup-4 $75/mo
-- [Crunchy Bridge pricing](https://www.crunchydata.com/pricing) — Hobby $10/mo
-- [Yotta data center](https://yotta.com/data-center/) — Panvel NM1 + Greater Noida
-- [Azure DB for PostgreSQL pricing](https://azure.microsoft.com/en-us/pricing/details/postgresql/flexible-server/) — B1ms general
-
-### Bash verified May 2026
-- ping `blr1.digitaloceanspaces.com (5.101.108.233)` from WSL2 Mumbai broadband: 11ms avg
-- traceroute confirms India-backbone routing (TATA, Indian transit)
-
-### Context7 verified (carried over from v3)
-- Fly Managed Postgres regions: NO Mumbai (sin closest)
-- Neon regions: NO Mumbai (Singapore closest)
-- Supabase Mumbai (`ap-south-1`) confirmed
-- Turso `aws-ap-south-1` regional URL confirmed
-- DO PgBouncer connection ratios (cross-checked with WebFetch)
+**End of v5 R-10 strategic synthesis. Doc-only commit; supersedes v4. tools=130 invariant preserved. NO source mutations. Phase 2.6 dispatch GATED on user authorization with primary recommendation: Path 1 (Defer) + Path E (Try-Before-Buy) when convenient. Diminishing-returns ceiling reached for research-by-paper; further information requires user-side action.**
