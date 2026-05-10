@@ -87,7 +87,6 @@ require (
 // (kc/audit) and earlier in the multi-module decomposition arc.
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-users => ../users
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

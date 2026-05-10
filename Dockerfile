@@ -26,7 +26,6 @@ COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
 COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY kc/ticker/go.mod kc/ticker/go.sum* kc/ticker/
 COPY kc/usecases/go.mod kc/usecases/go.sum* kc/usecases/
-COPY kc/users/go.mod kc/users/go.sum* kc/users/
 COPY kc/watchlist/go.mod kc/watchlist/go.sum* kc/watchlist/
 COPY oauth/go.mod oauth/go.sum* oauth/
 COPY plugins/go.mod plugins/go.sum* plugins/

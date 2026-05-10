@@ -127,7 +127,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/telegram => ../../kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../../kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ../../kc/usecases
-	github.com/algo2go/kite-mcp-users => ../../kc/users
 	github.com/zerodha/kite-mcp-server/kc/watchlist => ../../kc/watchlist
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
