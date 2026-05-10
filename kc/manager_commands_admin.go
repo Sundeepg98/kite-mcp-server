@@ -407,75 +407,116 @@ func (m *Manager) registerAlertCommands() error {
 
 // --- Mutual Funds: place / cancel order + SIP ------------------------------
 
-func (m *Manager) registerMFCommands() error {
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceMFOrderCommand](), func(ctx context.Context, msg any) (any, error) {
+// AdminMFRegistrarDeps holds the dependencies for mutual-fund admin
+// commands (PlaceMFOrder, CancelMFOrder, PlaceMFSIP, CancelMFSIP — 4
+// commands).
+type AdminMFRegistrarDeps struct {
+	SessionSvc       *SessionService
+	DispatcherGetter func() *domain.EventDispatcher
+	EventStoreGetter func() *eventsourcing.EventStore
+}
+
+// registerAdminMFCommandsOnBus is the package-level pure-function
+// registrar for mutual-fund admin commands.
+func registerAdminMFCommandsOnBus(
+	bus *cqrs.InMemoryBus,
+	deps AdminMFRegistrarDeps,
+	logger *slog.Logger,
+) error {
+	if err := bus.Register(reflect.TypeFor[cqrs.PlaceMFOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceMFOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewPlaceMFOrderUseCase(m.SessionSvc, m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		uc := usecases.NewPlaceMFOrderUseCase(deps.SessionSvc, logger)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CancelMFOrderCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.CancelMFOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelMFOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewCancelMFOrderUseCase(m.SessionSvc, m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		uc := usecases.NewCancelMFOrderUseCase(deps.SessionSvc, logger)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceMFSIPCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.PlaceMFSIPCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceMFSIPCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewPlaceMFSIPUseCase(m.SessionSvc, m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		uc := usecases.NewPlaceMFSIPUseCase(deps.SessionSvc, logger)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CancelMFSIPCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.CancelMFSIPCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelMFSIPCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewCancelMFSIPUseCase(m.SessionSvc, m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
+		uc := usecases.NewCancelMFSIPUseCase(deps.SessionSvc, logger)
+		if deps.EventStoreGetter != nil {
+			if es := deps.EventStoreGetter(); es != nil {
+				uc.SetEventStore(es)
+			}
 		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
+		if deps.DispatcherGetter != nil {
+			if d := deps.DispatcherGetter(); d != nil {
+				uc.SetEventDispatcher(d)
+			}
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 	return nil
+}
+
+// registerMFCommands delegates to the package-level pure-function
+// registrar (Tier 2.3 slice 4/6).
+func (m *Manager) registerMFCommands() error {
+	return registerAdminMFCommandsOnBus(m.commandBus, AdminMFRegistrarDeps{
+		SessionSvc:       m.SessionSvc,
+		DispatcherGetter: m.eventing.Dispatcher,
+		EventStoreGetter: m.eventing.Store,
+	}, m.Logger)
 }
 
 // --- Ticker: start / stop / subscribe / unsubscribe ------------------------
