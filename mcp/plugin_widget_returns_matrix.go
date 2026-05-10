@@ -5,7 +5,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // returnsMatrixWidgetData builds a per-holding returns table. Rows are

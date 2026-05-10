@@ -7,7 +7,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // registerCQRSHandlers wires use cases into the command/query buses. Called

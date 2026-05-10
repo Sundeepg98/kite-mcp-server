@@ -7,7 +7,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-instruments"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // lotSizeLookupAdapter wraps the concrete *instruments.Manager so it

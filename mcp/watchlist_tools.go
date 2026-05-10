@@ -11,7 +11,7 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 	"github.com/algo2go/kite-mcp-watchlist"
 	"github.com/algo2go/kite-mcp-oauth"
 )

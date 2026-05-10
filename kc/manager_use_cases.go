@@ -1,6 +1,6 @@
 package kc
 
-import "github.com/zerodha/kite-mcp-server/kc/usecases"
+import "github.com/algo2go/kite-mcp-usecases"
 
 // manager_use_cases.go holds the startup-once construction of use case
 // instances that the CommandBus / QueryBus handlers dispatch into.

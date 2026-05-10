@@ -20,7 +20,7 @@ import (
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/algo2go/kite-mcp-riskguard"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 	"github.com/algo2go/kite-mcp-oauth"
 )
 

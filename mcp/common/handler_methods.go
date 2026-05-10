@@ -10,7 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-cqrs"
 	logport "github.com/algo2go/kite-mcp-logger"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 	"github.com/algo2go/kite-mcp-users"
 	"github.com/algo2go/kite-mcp-oauth"
 )

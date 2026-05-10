@@ -92,7 +92,7 @@ require (
 	github.com/algo2go/kite-mcp-registry v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-templates v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-ticker v0.1.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-usecases v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-watchlist v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-oauth v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000 // indirect
@@ -118,6 +118,6 @@ replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../../kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/telegram => ../../kc/telegram
-	github.com/zerodha/kite-mcp-server/kc/usecases => ../../kc/usecases
+	github.com/algo2go/kite-mcp-usecases => ../../kc/usecases
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

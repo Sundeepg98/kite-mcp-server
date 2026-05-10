@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // registerRemainingQueries wires the 22 read tools migrated in batch D into

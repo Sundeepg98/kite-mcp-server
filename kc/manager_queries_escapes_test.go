@@ -8,7 +8,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-audit"
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // newRegisteredAuditStore returns an initialized audit.Store backed by an

@@ -7,7 +7,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // registerAdminCommands wires CommandBus handlers for the Admin (user +

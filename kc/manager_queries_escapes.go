@@ -5,7 +5,7 @@ import (
 	"reflect"
 
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/algo2go/kite-mcp-usecases"
 )
 
 // registerEscapeQueries wires the remaining direct-usecase call sites
