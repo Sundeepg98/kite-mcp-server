@@ -1,5 +1,7 @@
 cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdBtwLoEkH9Zs=
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
+github.com/algo2go/kite-mcp-alerts v0.1.0 h1:sNkEvj49d1K0oUFIIwxTVSAG8G4SFm+1W1hZB9EozdU=
+github.com/algo2go/kite-mcp-alerts v0.1.0/go.mod h1:8vcloBkXXbLil+yjb0JB4Ya2BVLVIrH8m/rsKBaUa4s=
 github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=
 github.com/algo2go/kite-mcp-broker v0.1.0/go.mod h1:96SPH/3bGKE/PGZPC04LUeY5czpd7WCLC5fzXRG/Qhc=
 github.com/algo2go/kite-mcp-decorators v0.1.0 h1:UHGrpHOeHVjDTAqnr3qDY8FfMy/e1zE8ZnJywaQ5+Hc=

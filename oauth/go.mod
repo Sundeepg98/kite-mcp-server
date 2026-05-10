@@ -77,7 +77,6 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../
-	github.com/algo2go/kite-mcp-alerts => ../kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/users => ../kc/users
 	github.com/zerodha/kite-mcp-server/testutil => ../testutil
 )

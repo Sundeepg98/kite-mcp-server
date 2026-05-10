@@ -119,7 +119,6 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../
 	github.com/zerodha/kite-mcp-server/app/providers => ../app/providers
-	github.com/algo2go/kite-mcp-alerts => ../kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../kc/cqrs

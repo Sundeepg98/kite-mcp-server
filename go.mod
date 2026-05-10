@@ -3,6 +3,7 @@ module github.com/zerodha/kite-mcp-server
 go 1.25.0
 
 require (
+	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/algo2go/kite-mcp-decorators v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
@@ -23,7 +24,6 @@ require (
 	github.com/yuin/goldmark v1.8.2
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/app/providers v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000
@@ -65,25 +65,25 @@ require (
 // Path A.6.2 dependent), kc/logger (commit e6231a9 — Path A.7),
 // kc/templates (commit 1db565a — Path A.8' after Path A.8 kc/billing
 // halt at 71f17eb on deep-cluster cliff), kc/aop (commit 5db5165 —
-// Path A.9 research-tag-gated leaf), and kc/domain (commit 9ee8212
-// — Path A.10, foundation for kc/billing chain) to algo2go GitHub
+// Path A.9 research-tag-gated leaf), kc/domain (commit 9ee8212 —
+// Path A.10 foundation for kc/billing chain), and kc/alerts (commit
+// fd9d9fb — Path A.11 step 1 of billing chain) to algo2go GitHub
 // repos. Phase B canary deletions (broker+money @ commit bef0b31,
 // decorators @ commit c19bca9, i18n @ commit 84aab63, legaldocs @
 // commit 326c045, isttz+scheduler @ commit b72a7e9, kc/logger @
 // commit 1d977b7, kc/templates @ commit 10b30a3, kc/aop @ commit
-// ad137cf, and kc/domain @ this commit) drop their replace
-// directives — all eleven are now fetched from
+// ad137cf, kc/domain @ commit da3f9ee, and kc/alerts @ this commit)
+// drop their replace directives — all twelve are now fetched from
 // algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
 // algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0
 // + algo2go/kite-mcp-legaldocs@v0.1.0 + algo2go/kite-mcp-isttz@v0.1.0
 // + algo2go/kite-mcp-scheduler@v0.1.0 + algo2go/kite-mcp-logger@v0.1.0
 // + algo2go/kite-mcp-templates@v0.1.0 + algo2go/kite-mcp-aop@v0.1.0
-// + algo2go/kite-mcp-domain@v0.1.0 via GOPROXY.
+// + algo2go/kite-mcp-domain@v0.1.0 + algo2go/kite-mcp-alerts@v0.1.0
 // via GOPROXY. The require lines at the top of this go.mod are the
 // operative source for those modules.
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
-	github.com/algo2go/kite-mcp-alerts => ./kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ./kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ./kc/cqrs
