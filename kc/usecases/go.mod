@@ -99,7 +99,6 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
-	github.com/algo2go/kite-mcp-cqrs => ../cqrs
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 )

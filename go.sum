@@ -6,6 +6,8 @@ github.com/algo2go/kite-mcp-billing v0.1.0 h1:RAMSpONN2Cr/CWwfXB/ZZtDN+QU4G1AR2p
 github.com/algo2go/kite-mcp-billing v0.1.0/go.mod h1:O8foY5nawhbrj88J41uxKRg130pWdCDd1Q6Ir1bYRz0=
 github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=
 github.com/algo2go/kite-mcp-broker v0.1.0/go.mod h1:96SPH/3bGKE/PGZPC04LUeY5czpd7WCLC5fzXRG/Qhc=
+github.com/algo2go/kite-mcp-cqrs v0.1.0 h1:agi+5xTEijbcOrNAnEK8NZ2DWe1o606+wmeohgw7epc=
+github.com/algo2go/kite-mcp-cqrs v0.1.0/go.mod h1:6y/uT7fqayrjY6RNi6gu2DHZO61vpA4l/tiV6nHIc9g=
 github.com/algo2go/kite-mcp-decorators v0.1.0 h1:UHGrpHOeHVjDTAqnr3qDY8FfMy/e1zE8ZnJywaQ5+Hc=
 github.com/algo2go/kite-mcp-decorators v0.1.0/go.mod h1:KUTxUT4pxYffXiw/fIw456AZ7J5hhz0qR7eC7ZMVqDw=
 github.com/algo2go/kite-mcp-domain v0.1.0 h1:tLQ+7WxFolMxo4dtW3BN45WFnYvbTqsMF67tHGK+NjM=
