@@ -67,7 +67,6 @@ go 1.25.0
 use (
 	.
 	./app/providers
-	./kc/audit
 	./kc/papertrading
 	./kc/riskguard
 	./kc/sectors

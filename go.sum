@@ -2,6 +2,8 @@ cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdB
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 github.com/algo2go/kite-mcp-alerts v0.1.0 h1:sNkEvj49d1K0oUFIIwxTVSAG8G4SFm+1W1hZB9EozdU=
 github.com/algo2go/kite-mcp-alerts v0.1.0/go.mod h1:8vcloBkXXbLil+yjb0JB4Ya2BVLVIrH8m/rsKBaUa4s=
+github.com/algo2go/kite-mcp-audit v0.1.0 h1:U3JS8D4iXJvlZ/yqdXSDr+l6n0MmN/yP95duv8jpaGI=
+github.com/algo2go/kite-mcp-audit v0.1.0/go.mod h1:oQHRW5vMOHB/Dcz2FazDnF10/gbvnaA1eMXfHs4L2Pw=
 github.com/algo2go/kite-mcp-billing v0.1.0 h1:RAMSpONN2Cr/CWwfXB/ZZtDN+QU4G1AR2pXkhnbPYzE=
 github.com/algo2go/kite-mcp-billing v0.1.0/go.mod h1:O8foY5nawhbrj88J41uxKRg130pWdCDd1Q6Ir1bYRz0=
 github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=

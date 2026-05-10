@@ -15,7 +15,6 @@ WORKDIR /app
 COPY go.mod go.sum ./
 COPY app/providers/go.mod app/providers/go.sum* app/providers/
 COPY kc/papertrading/go.mod kc/papertrading/go.sum* kc/papertrading/
-COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/
 COPY kc/riskguard/go.mod kc/riskguard/go.sum* kc/riskguard/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
 COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
