@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Path A.5 — kc/legaldocs Phase B canary deletion ON MASTER.
+# Mirror of path-a-i18n-canary-delete.sh.
+
+set -euo pipefail
+
+ROOT=/mnt/d/Sundeep/projects/kite-mcp-server
+
+cd "$ROOT"
+
+echo "=== Phase 0: Pre-flight ==="
+HEAD_BEFORE=$(git rev-parse HEAD)
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo "HEAD before: $HEAD_BEFORE"
+[ "$BRANCH" != "master" ] && { echo "ERROR: not on master"; exit 1; }
+
+echo ""
+echo "=== Phase 1: Drop replace directive in root go.mod ==="
+sed -i '/github\.com\/algo2go\/kite-mcp-legaldocs => \.\/kc\/legaldocs/d' go.mod
+grep -nE 'algo2go/kite-mcp-legaldocs' go.mod | head -3
+
+echo ""
+echo "=== Phase 2: Drop replace directives in peer go.mod files ==="
+find . -path ./kc/legaldocs -prune -o -path ./.research -prune -o -name 'go.mod' -type f -print | while read -r mod; do
+	if grep -qE 'github\.com/algo2go/kite-mcp-legaldocs => ' "$mod" 2>/dev/null; then
+		sed -i '/github\.com\/algo2go\/kite-mcp-legaldocs => /d' "$mod"
+		echo "  patched: $mod"
+	fi
+done
+
+echo ""
+echo "=== Phase 3: Drop ./kc/legaldocs from go.work (CRLF-safe) ==="
+sed -i '/^[[:space:]]\+\.\/kc\/legaldocs\b/d' go.work
+echo "go.work member count: $(grep -cE '^[[:space:]]+\./' go.work)"
+
+echo ""
+echo "=== Phase 4: Drop kc/legaldocs COPY line from Dockerfile ==="
+sed -i '/^COPY kc\/legaldocs\/go\.mod kc\/legaldocs\/go\.sum/d' Dockerfile
+echo "Dockerfile legaldocs lines: $(grep -c 'kc/legaldocs' Dockerfile || true)"
+
+echo ""
+echo "=== Phase 5: Delete ./kc/legaldocs/ ==="
+git rm -rq kc/legaldocs/
+
+echo ""
+echo "=== Phase 5b: Pin placeholder versions in peer go.mods ==="
+find . -path ./.research -prune -o -name 'go.mod' -type f -print | while read -r mod; do
+	if grep -qE 'github\.com/algo2go/kite-mcp-legaldocs v0\.0\.0-00010101000000-000000000000' "$mod" 2>/dev/null; then
+		sed -i 's#github\.com/algo2go/kite-mcp-legaldocs v0\.0\.0-00010101000000-000000000000#github.com/algo2go/kite-mcp-legaldocs v0.1.0#g' "$mod"
+		echo "  pinned: $mod"
+	fi
+done
+
+echo ""
+echo "=== Phase 6: WSL2 build verification ==="
+GO=/usr/local/go/bin/go
+$GO version
+echo ""
+echo "--- go mod tidy ---"
+$GO mod tidy 2>&1 | tail -5
+echo ""
+echo "--- workspace go build ./... ---"
+$GO build ./...
+echo "BUILD: PASS"
+echo ""
+echo "--- GOWORK=off go build ./... ---"
+GOWORK=off $GO build ./...
+echo "BUILD: PASS"
+
+echo ""
+echo "=== Phase 7: Tools=111 invariant test ==="
+$GO test -run "^TestHTTPRoundtrip_InitToolsList$" -count=1 -timeout 60s ./mcp/ 2>&1 | tail -3
+
+echo ""
+echo "=== Phase 8: Full mcp/ test suite ==="
+$GO test -timeout 180s -count=1 ./mcp/ 2>&1 | tail -3
+
+echo ""
+echo "=== Phase 9: TestToolDefinitions_Coverage ==="
+$GO test -run '^TestToolDefinitions_Coverage$' -count=1 -timeout 60s ./mcp/ 2>&1 | tail -3
+
+echo ""
+echo "=== Phase 10: Summary ==="
+echo "Files changed: $(git status --short | grep -vE '^\?\?' | wc -l)"
+git status --short | grep -vE '^\?\?' | head -10
