@@ -8,7 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	"github.com/algo2go/kite-mcp-scheduler"
 )
 
 // scheduler.go — Wave D Phase 2 Slice P2.4b. Provides the App's

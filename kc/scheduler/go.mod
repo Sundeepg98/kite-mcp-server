@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/scheduler
+module github.com/algo2go/kite-mcp-scheduler
 
 go 1.25.0
 

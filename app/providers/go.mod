@@ -50,7 +50,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/scheduler v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
 )
@@ -129,7 +129,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../../kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/registry => ../../kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../../kc/riskguard
-	github.com/zerodha/kite-mcp-server/kc/scheduler => ../../kc/scheduler
+	github.com/algo2go/kite-mcp-scheduler => ../../kc/scheduler
 	github.com/zerodha/kite-mcp-server/kc/telegram => ../../kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/templates => ../../kc/templates
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../../kc/ticker

@@ -17,7 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/algo2go/kite-mcp-money"
-	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	"github.com/algo2go/kite-mcp-scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/paper"
