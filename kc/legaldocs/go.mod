@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/legaldocs
+module github.com/algo2go/kite-mcp-legaldocs
 
 go 1.25.0
 

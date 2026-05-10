@@ -9,7 +9,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
-	"github.com/zerodha/kite-mcp-server/kc/legaldocs"
+	"github.com/algo2go/kite-mcp-legaldocs"
 )
 
 // termsMarkdown is the raw Terms of Service markdown, imported from the
