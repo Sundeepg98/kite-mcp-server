@@ -1,4 +1,4 @@
-// Go workspace declaration — multi-module decomposition starting point.
+// Go workspace declaration — multi-module decomposition end state.
 //
 // This is the in-tree mechanism that lets us extract bounded contexts to
 // their own go.mod files without changing import paths and without
@@ -6,61 +6,68 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (14 modules — Path A inauguration: 16 modules promoted to
-// algo2go GitHub repos through Path A.1 through Path A.15, each via
-// canary cutover + Phase B canary deletion. Arc: 30 (initial) ->
-// 14 (current). All Phase B-deleted modules are fetched from
-// algo2go/kite-mcp-{broker,money,decorators,i18n,legaldocs,isttz,
-// scheduler,logger,templates,aop,domain,alerts,users,oauth,billing,
-// watchlist}@v0.1.0 via GOPROXY. Per-promotion canary commits +
-// Phase B delete commits referenced in git log.
+// CURRENT STATE (post Path A.27 closure + Tier 1 + Tier 2 cleanup):
+//   - 4 in-tree workspace members (root + plugins + testutil +
+//     app/providers)
+//   - 28 algo2go modules external (broker, money, decorators, i18n,
+//     legaldocs, isttz, scheduler, logger, templates, aop, domain,
+//     alerts, users, oauth, billing, watchlist, instruments, registry,
+//     ticker, cqrs, eventsourcing, audit, riskguard, usecases,
+//     papertrading, telegram, sectors, clockport)
+//   - Workspace member count progression: 30 (initial) → 11 (mid-Path-A,
+//     post Path A.20 eventsourcing) → 4 (post Path A.27 clockport
+//     closure). Each Phase B canary deletion removed one workspace
+//     member.
 //
-// Path A.14 closed the original Path A.8 halt at commit 71f17eb
-// (kc/billing cluster cliff — alerts/users/oauth chain now fully
-// external).
+// PATH A INAUGURATION ARC (commits in git log):
+//   - Path A.1-A.15: first 16 modules promoted (broker through
+//     watchlist; close at v0.1.0).
+//   - Path A.16-A.18: instruments + registry + ticker.
+//   - Path A.19-A.26: cqrs + eventsourcing + audit + riskguard +
+//     usecases + papertrading + telegram + sectors. Path A.26 closed
+//     the kc/* externalization arc — every kc/* subdirectory with its
+//     own go.mod is now external.
+//   - Path A.27: clockport — 28th module. Extends the arc by 1 to
+//     resolve the testutil-misnaming problem (production port
+//     Clock/Ticker/RealClock previously lived inside testutil/clock.go,
+//     forcing kc/fill_watcher.go to import "testutil" for production
+//     code paths). Now external + testutil contains test-fakes only.
 //
-// The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money
-// + broker + kc/audit + kc/riskguard + kc/billing established the
-// "bidirectional cross-module deps with transitive replace" pattern
-// that subsequent extractions inherited.
+// IN-TREE FACADE DECOMPOSITION (Tier 1 closure-DI sub-track):
+//   - Tier 1.1 brokers (commit 34a32bf): m *Manager → 8 closure pairs
+//   - Tier 1.2 eventing (commit fd4b20e): m *Manager → 16 closure pairs
+//     (handles Wave-D's 8 use-case propagation surface)
+//   - Tier 1.3 scheduling (commit 650f4c3): m *Manager → 4 closure pairs
+//     including 1 closure-with-write-back for sessionManager mutation
+//   Two facades remain on back-pointers (StoreRegistry +
+//   SessionLifecycleService) — explicitly deferred per the Tier 1
+//   design doc (lower architectural leverage; no current pain).
 //
-// Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
-// roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
-// kc/cqrs, kc/decorators, kc/domain, kc/eventsourcing, kc/i18n,
-// kc/instruments, kc/isttz, kc/legaldocs, kc/logger, kc/papertrading,
-// kc/registry, kc/scheduler, kc/telegram, kc/templates, kc/ticker,
-// kc/usecases, kc/users, kc/watchlist, oauth, testutil — completing the
-// 27/27 zero-monolith ceiling at commit e3beb2e.
+// IN-TREE COMMAND REGISTRAR EXTRACTION (Tier 2 pure-function sub-track):
+//   - Tier 2.1 reconstitution rename (commit 034bf9b): cosmetic
+//     manager_reconstitution.go → reconstitution.go
+//   - Tier 2.2 OAuth registrar (commit 41b9e90): pure-function
+//     registerOAuthBridgeCommandsOnBus(bus, deps, logger) with
+//     OAuthBridgeRegistrarDeps struct. Lazy AlertDBGetter closure
+//     preserves command-dispatch-time evaluation semantics.
+//   - Tier 2.3 admin registrar (commits 4ed17ae → 08cc719, 6 sub-slices):
+//     6 pure-function registrars across 22 admin commands (AdminUser +
+//     AdminRisk + Alerts + MF + Ticker + NativeAlerts). All deps default
+//     to closure-getters per the Tier 2.2 lesson (preserve laziness).
 //
-// Anchor 2 (commit-this) extracts app/providers as the 28th module —
-// the Fx provider/recipe composition root for the DI graph (Manager,
-// AlertSvc, AuditStore, BillingStore, CredentialSvc, EventDispatcher,
-// FamilyService, LifecycleManager, LoggerPort, MCPServer, OrderSvc,
-// PortfolioSvc, RiskGuard, Scheduler, SessionSvc, TelegramNotifier).
-// First non-kc-prefixed extraction. Audits 7ac9d34 / 5fbd4a1 /
-// fd603f3 framed it as "complete the architectural roadmap".
-// Bidirectional cross-module deps with the root (app/wire.go +
-// cmd/event-graph/main.go consume providers; providers consume kc
-// parent + mcp + app/metrics from root). Replace block in
-// app/providers/go.mod has 28 entries — root + 27 already-extracted
-// modules — same shape as kc/usecases + heavier fan-out.
+// PATTERN PRECEDENT (canonical reference for future module extractions):
+//   - Path A.6 isttz precedent: pure-stdlib leaf, zero algo2go deps,
+//     testify-only test deps. Replicated by sectors (A.26) + clockport
+//     (A.27).
+//   - usecases.RegisterOAuthClientHandlers (in algo2go/kite-mcp-usecases):
+//     pre-existing pure-function registrar pattern. Adopted as the
+//     Tier 2 template.
 //
-// Tier 6 (this commit) extracts plugins/ as the 29th module — the
-// external-tool / before-after hook extension surface. Contains
-// example/ (sample ServerTimeTool), rolegate/ (RBAC viewer-blocks-write
-// before-hook), and telegramnotify/ (family-admin DM after-hook).
-// Final architectural roadmap item — was deferred when plugins/ imported
-// the kc-parent god-struct and the un-extracted app providers. Anchor 6
-// (commit ea34058) collapsed kc-parent to constructor-only; Anchor 2
-// (commit e87cd38) extracted app/providers — both blockers resolved.
-// Bidirectional deps with root: plugins consumes kc parent + mcp parent
-// + kc/users + oauth; root's app/wire.go imports plugins/rolegate +
-// plugins/telegramnotify. Replace block in plugins/go.mod has 28
-// entries — same shape as app/providers's 28-entry plateau.
-//
-// CI: matrix-test per member is the canonical path. The default
-// `go test ./...` from the root still works because workspace mode
-// includes all members.
+// CI: matrix-test per workspace member is the canonical path. The
+// default `go test ./...` from the root still works because workspace
+// mode includes all members. GOWORK=off `go test ./...` exercises the
+// production Docker build path which fetches algo2go modules from
+// GOPROXY directly.
 
 go 1.25.0
 
