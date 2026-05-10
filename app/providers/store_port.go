@@ -1,25 +1,21 @@
-// Package providers — Phase 2 Postgres-adapter port (design stub).
+// Package providers — Phase 2 Postgres-adapter port.
 //
 // Phase 2 of the 10K-agent capacity plan introduces an OPTIONAL Postgres
 // driver alongside the current SQLite default. This file is the IN-TREE
-// port-interface declaration; the implementations (SQLite + Postgres)
-// live in the external `github.com/algo2go/kite-mcp-alerts` repo.
+// port-interface declaration; the implementations live in the external
+// `github.com/algo2go/kite-mcp-alerts` repo (v0.4.0+ ships both SQLite
+// and Postgres backends).
 //
 // See:
 //   - .research/phase-2-pick.md (decision record)
 //   - .research/phase-2-postgres-adapter-design.md (full design)
+//   - .research/phase-2-sql-portability-audit.md (Stage 1 SQL audit)
 //   - .research/10000-agent-blocker-analysis.md L2.4 (trigger conditions)
 //
-// At HEAD c6eea80 this is a doc-only stub: no driver added, no behavior
-// change, tools=130 invariant preserved. The Store interface compile-
-// time-asserts that the existing *alerts.DB already satisfies the Phase 2
-// contract — proving zero refactor cost when Phase 2.2 lands.
-//
-// IMPORTANT: this file is NOT consumed by production wiring at this
-// commit. It is documentation in code form, validated by the compiler.
-// Production wiring (P2.3 onwards) will replace ProvideAlertDB's
-// alerts.OpenDB call with a driver-switching factory that returns the
-// same *alerts.DB type satisfying this Store interface.
+// Phase 2.3 (this commit): the compile-time satisfaction check at the
+// bottom of this file is now ACTIVE — `*alerts.DB` (from
+// kite-mcp-alerts v0.4.0) is verified to satisfy the Store interface.
+// ProvideAlertDB in alertdb.go is now a driver-switching factory.
 
 package providers
 
@@ -27,118 +23,92 @@ import (
 	alerts "github.com/algo2go/kite-mcp-alerts"
 )
 
-// Driver identifies which database backend backs the Store.
+// Dialect is a re-export of alerts.Dialect so consumers of this package
+// can refer to "the database dialect" without importing alerts directly.
+// Identical type — type alias preserves interchangeability at every
+// call site.
 //
-// Default at HEAD c6eea80: DriverSQLite (the only implementation that
-// exists). DriverPostgres is the Phase 2.2 deliverable in the external
-// repo; this enum locks in its name + selection contract now.
-type Driver string
+// Phase 2.3 reconciliation: the original Phase 2.0 stub used a local
+// `Driver` enum. Phase 2.2 in the external repo shipped `Dialect`
+// (semantically identical, just a different name). Phase 2.3 converges
+// on the external name to avoid double-vocabulary.
+type Dialect = alerts.Dialect
 
+// Re-exported dialect constants. See alerts.DialectSQLite /
+// alerts.DialectPostgres for the source of truth.
 const (
-	// DriverSQLite — modernc.org/sqlite (cgo-free) backing alerts.OpenDB.
-	// File-based; default for zero-user / sub-1000-user state.
-	// Backed up via Litestream → Cloudflare R2 ($0/mo).
-	DriverSQLite Driver = "sqlite"
-
-	// DriverPostgres — github.com/jackc/pgx/v5 via database/sql stdlib.
-	// Phase 2 trigger: 1000+ concurrent users sustained, OR Phase 3
-	// multi-cell deployment. NOT IMPLEMENTED at HEAD c6eea80.
-	// Will be added in algo2go/kite-mcp-alerts via OpenPostgresDB.
-	DriverPostgres Driver = "postgres"
+	DialectSQLite   = alerts.DialectSQLite
+	DialectPostgres = alerts.DialectPostgres
 )
 
 // Store is the persistence-layer port for the kite-mcp-server.
 //
-// At HEAD c6eea80 the only concrete implementation is the SQLite-backed
-// *alerts.DB from algo2go/kite-mcp-alerts. Phase 2.2 will add a Postgres
-// implementation in the same external repo; both will satisfy this
-// interface so the consuming Fx provider (ProvideAlertDB) can swap them
-// transparently.
+// At Phase 2.3 the implementing concrete type is *alerts.DB from
+// kite-mcp-alerts v0.4.0, opened via alerts.OpenDB (SQLite) or
+// alerts.OpenPostgresDB (Postgres) by ProvideAlertDB based on the
+// AlertDBConfig.Driver field.
 //
 // SCOPE: this is the LOW-LEVEL handle abstraction (essentially a
 // wrapper over *sql.DB). Each external store package — kite-mcp-audit,
 // kite-mcp-billing, kite-mcp-registry, kite-mcp-watchlist — accepts a
 // *alerts.DB and uses it for its own table set. The Store interface
-// here is the union of the operations these packages need from the DB
-// itself — plus lifecycle + health-check.
+// here is the minimal contract those packages don't directly use but
+// that the orchestrator (ProvideAlertDB + healthz handler) needs.
 //
-// EMPIRICALLY VERIFIED at HEAD c6eea80:
-//
-//	21+ files in app/ and app/providers/ accept *alerts.DB by reference.
-//	Per-table Stores (audit.Store, billing.Store, etc.) construct from
-//	*alerts.DB via audit.New(db), billing.NewStore(db, logger), etc.
-//	*alerts.DB itself wraps *sql.DB and the alerts table set.
-//
-// PORT CONTRACT (binding for Phase 2.2 Postgres implementation):
+// PORT CONTRACT (binding for the kite-mcp-alerts implementation):
 //
 //   1. Connection lifecycle: Close() must release all underlying conns.
-//   2. Health check: HealthCheck() returns nil iff a 1-row SELECT works.
-//   3. Driver identity: Driver() returns the enum constant — required
-//      for runtime branching when SQL needs dialect-specific syntax.
+//   2. Health check: Ping() returns nil iff a 1-row SELECT works.
+//      Used by /healthz?probe=deep.
+//   3. Dialect identity: Dialect() returns the enum constant for SQL
+//      dispatch in dialect.go's TableExists/ColumnExists/PragmaInit
+//      helpers. Verified by the *alerts.DB.Dialect() method added in
+//      kite-mcp-alerts v0.4.0.
 //   4. Schema migration: applied at Open() time; idempotent. The
 //      external implementer owns the per-dialect migration script.
 //   5. Encryption at rest: row-level AES-256-GCM via HKDF (preserved
-//      across drivers). The encryption is application-layer, not driver
-//      feature; keep identical surface across both.
-//   6. Per-tenant scoping: by `email TEXT` column. Both dialects must
-//      support indexed lookups on email.
-//   7. SQL portability: queries must work on both dialects. Where
-//      impossible (INSERT OR REPLACE → ON CONFLICT), the implementation
-//      branches via Driver() at the call site.
+//      across drivers). Application-layer, not a driver feature.
+//   6. Per-tenant scoping: by `email TEXT` column.
+//   7. SQL portability: queries use the dialect-portable ON CONFLICT
+//      form (Phase 2.1 Stage 1; v0.2.0+). Dialect-specific paths
+//      (PRAGMA dispatch, sqlite_master vs information_schema) route
+//      through dialect.go helpers (Phase 2.1.6; v0.3.x).
 //
 // USAGE:
 //
 //	var db Store = alerts.OpenDB("./alerts.db")  // satisfied by alerts.DB
 //	defer db.Close()
-//	if err := db.HealthCheck(); err != nil { ... }
+//	if err := db.Ping(); err != nil { ... }
+//	switch db.Dialect() {
+//	case DialectSQLite: ...
+//	case DialectPostgres: ...
+//	}
 //
 // The compile-time satisfaction check at the bottom of this file
-// (`var _ Store = (*alerts.DB)(nil)`) guarantees that adding new
-// methods here breaks the build until *alerts.DB implements them — a
-// safety rail for Phase 2.2's external-repo work.
+// (`var _ Store = (*alerts.DB)(nil)`) is ACTIVE at Phase 2.3 — adding
+// new methods here breaks the build until *alerts.DB implements them,
+// preventing accidental contract drift.
 type Store interface {
-	// Driver returns the underlying driver enum. Required for SQL
-	// dialect dispatch at call sites that have unavoidable
-	// SQLite-vs-Postgres differences (INSERT OR REPLACE syntax,
-	// $N vs ? placeholders if not abstracted).
-	//
-	// Phase 2.2: alerts.DB grows a Driver() method returning
-	// DriverSQLite. The Postgres constructor returns a DB with
-	// Driver()==DriverPostgres.
-	Driver() Driver
+	// Dialect returns the underlying database dialect. Required for
+	// SQL dispatch at call sites that have unavoidable SQLite-vs-
+	// Postgres differences (catalog queries, PRAGMA, etc.).
+	Dialect() Dialect
 
-	// HealthCheck returns nil if the underlying connection is alive
-	// and the schema is reachable. Used by /healthz endpoint.
-	// SQLite: PRAGMA quick_check OR SELECT 1.
-	// Postgres: SELECT 1.
-	//
-	// Phase 2.2: alerts.DB grows a HealthCheck() method.
-	HealthCheck() error
+	// Ping returns nil if the underlying connection is alive and the
+	// schema is reachable. Used by /healthz?probe=deep.
+	// SQLite: SELECT 1 round-trip (modernc.org/sqlite Ping is
+	//         insufficient — see alerts.DB.Ping comment).
+	// Postgres: SELECT 1 round-trip via pgx.
+	Ping() error
 
 	// Close releases the underlying database resources (connection
 	// pool, file handle for SQLite). Idempotent: subsequent Close
 	// calls return nil.
-	//
-	// Currently: alerts.DB.Close() exists.
 	Close() error
 }
 
-// Compile-time satisfaction check.
-//
-// At HEAD c6eea80 this assertion is a TODO — *alerts.DB does not yet
-// expose Driver() and HealthCheck(). Phase 2.2 in the external repo
-// adds those methods, at which point this assertion compiles green.
-//
-// Until Phase 2.2 lands, this assertion is INTENTIONALLY commented out
-// to keep the codebase building. Uncomment in the Phase 2.3 commit
-// that adds the driver-switching factory in ProvideAlertDB.
-//
-//	var _ Store = (*alerts.DB)(nil)
-//
-// The commented-out assertion documents the contract without breaking
-// the build, while still serving as a search marker for the Phase 2.2
-// external-repo work and the Phase 2.3 in-tree work.
-
-// _ silences the "imported and not used" check until the assertion
-// above is uncommented in Phase 2.3.
-var _ = alerts.OpenDB
+// Compile-time satisfaction check — *alerts.DB (kite-mcp-alerts v0.4.0)
+// satisfies the Store interface. Phase 2.3: ACTIVE. Adding methods to
+// the Store interface breaks the build until *alerts.DB implements
+// them, catching contract drift at compile time.
+var _ Store = (*alerts.DB)(nil)

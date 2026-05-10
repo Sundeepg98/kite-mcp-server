@@ -3,9 +3,9 @@ module github.com/zerodha/kite-mcp-server
 go 1.25.0
 
 require (
-	github.com/algo2go/kite-mcp-alerts v0.1.0
+	github.com/algo2go/kite-mcp-alerts v0.4.0
 	github.com/algo2go/kite-mcp-audit v0.1.0
-	github.com/algo2go/kite-mcp-billing v0.1.0
+	github.com/algo2go/kite-mcp-billing v0.3.0
 	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/algo2go/kite-mcp-clockport v0.1.0
 	github.com/algo2go/kite-mcp-cqrs v0.1.0
@@ -35,7 +35,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/mark3labs/mcp-go v0.46.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/stripe/stripe-go/v82 v82.5.1
 	github.com/yuin/goldmark v1.8.2
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
@@ -105,6 +105,10 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.9.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
@@ -119,6 +123,7 @@ require (
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect

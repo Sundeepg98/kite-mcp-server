@@ -93,6 +93,78 @@ func TestProvideAlertDB_FilePath_OpensDB(t *testing.T) {
 	})
 }
 
+// TestProvideAlertDB_DefaultDriver_IsSQLite verifies that an empty Driver
+// field defaults to sqlite (preserves pre-Phase-2.3 behavior). The legacy
+// AlertDBConfig had only Path — empty Driver MUST behave identically.
+func TestProvideAlertDB_DefaultDriver_IsSQLite(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "default_driver.db")
+	got, err := ProvideAlertDB(AlertDBConfig{Path: dbPath}, testLogger())
+	if err != nil {
+		t.Fatalf("expected nil error; got %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil DB")
+	}
+	t.Cleanup(func() { _ = got.Close() })
+
+	if got.Dialect() != alerts.DialectSQLite {
+		t.Errorf("default driver should be SQLite; got %q", got.Dialect())
+	}
+}
+
+// TestProvideAlertDB_ExplicitSQLite_OpensDB verifies that an explicit
+// Driver="sqlite" + Path opens the SQLite database (same as default).
+func TestProvideAlertDB_ExplicitSQLite_OpensDB(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "explicit_sqlite.db")
+	got, err := ProvideAlertDB(AlertDBConfig{Driver: "sqlite", Path: dbPath}, testLogger())
+	if err != nil {
+		t.Fatalf("expected nil error; got %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil DB")
+	}
+	t.Cleanup(func() { _ = got.Close() })
+
+	if got.Dialect() != alerts.DialectSQLite {
+		t.Errorf("Driver='sqlite' should yield SQLite dialect; got %q", got.Dialect())
+	}
+}
+
+// TestProvideAlertDB_PostgresDriver_EmptyURL_Errors verifies that
+// Driver="postgres" with an empty URL is a configuration error (the
+// SQLite empty-path silent-downgrade contract does NOT apply to
+// Postgres — there's no in-memory Postgres equivalent).
+func TestProvideAlertDB_PostgresDriver_EmptyURL_Errors(t *testing.T) {
+	t.Parallel()
+
+	got, err := ProvideAlertDB(AlertDBConfig{Driver: "postgres", URL: ""}, testLogger())
+	if err == nil {
+		t.Fatal("expected error for postgres driver with empty URL")
+	}
+	if got != nil {
+		t.Errorf("expected nil DB on config error; got non-nil")
+	}
+}
+
+// TestProvideAlertDB_UnknownDriver_Errors verifies that any non-sqlite,
+// non-postgres Driver value returns an error. Unknown drivers are config
+// bugs and must surface, not silently fall through.
+func TestProvideAlertDB_UnknownDriver_Errors(t *testing.T) {
+	t.Parallel()
+
+	got, err := ProvideAlertDB(AlertDBConfig{Driver: "mysql", Path: "/tmp/x.db"}, testLogger())
+	if err == nil {
+		t.Fatal("expected error for unknown driver")
+	}
+	if got != nil {
+		t.Errorf("expected nil DB on unknown driver; got non-nil")
+	}
+}
+
 // Note on the absent "bad path" test:
 //
 // We considered a third test case for ProvideAlertDB that exercises the
