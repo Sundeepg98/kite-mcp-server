@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/registry
+module github.com/algo2go/kite-mcp-registry
 
 go 1.25.0
 

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/algo2go/kite-mcp-registry"
 )
 
 // CredentialService owns credential resolution: per-user vs global credentials,
