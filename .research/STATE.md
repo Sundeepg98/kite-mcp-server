@@ -18,7 +18,7 @@
 
 ## TL;DR — three things to know
 
-1. **Phase 2.6 architecturally CLOSED.** libSQL/Turso adapter shipped (commits `d3c2a4a` + `5f8ee3b` + `2919f6e`). `ProvideAlertDB` factory accepts `Driver=sqlite|postgres|turso` via env switch. Production stays on SQLite default (`Driver` env unset). Authoritative doc: `phase-2-6-r10-decisions.md` (v8). All Phase 2.0-2.5 design docs archived.
+1. **Phase 2.6 architecturally CLOSED.** libSQL/Turso adapter shipped: `algo2go/kite-mcp-alerts d3c2a4a feat(sql): OpenLibSQL constructor + DialectLibSQL (Phase 2.6 Path 6)` (external repo) + `kite-mcp-server 5f8ee3b` (driver factory wiring) + `kite-mcp-server 2919f6e` (R-10 v8 closure doc). `ProvideAlertDB` factory accepts `Driver=sqlite|postgres|turso` via env switch. Production stays on SQLite default (`Driver` env unset). Authoritative doc: `phase-2-6-r10-decisions.md` (v8). All Phase 2.0-2.5 design docs archived.
 
 2. **Production is at master HEAD modulo `.research/`-only commits.** Production runs image `deployment-01KR9FPJC88YA80VWS7VMTWTY7` built from commit `bc5043e`; current master `21d5684` is 1-2 commits ahead but those commits are `.research/`-only (excluded from Docker build context). **No deploy needed.** Tool count: production reports `tools=111`; master-built binary registers `total_available=111` (verified by chain agent compiling + running locally — see `production-master-gap-report.md`). The earlier "19 tools / ~550 commits stale" framing was a measurement artefact: a `grep mcp.NewTool(` over `mcp/` returned 130 because it included 19 test-fixture calls in `*_test.go` files; filtering with `grep -v _test.go` yields 111. **No gap exists.**
 
@@ -80,7 +80,7 @@
 
 Per active `path-e-try-before-buy-results.md`:
 - **Track 1 (Turso aws-ap-south-1)**: COMPLETED — hello-world round-trip succeeded, fed into Phase 2.6 v6 + v8 decisions
-- **Track 2 (DO BLR1, fresh account)**: FALSIFIED — DO docs claim BLR1 supports managed Postgres but UI showed only NA/EU regions for fresh account. Reframed Path 2 in v7 doc as "DO BLR1 not viable for new operator accounts." This empirical finding is **still load-bearing**: any future "should we use DO Postgres BLR1?" decision must re-verify the account-specific availability.
+- **Track 2 (DO BLR1, fresh account)**: PAYMENT-METHOD-GATED — DO docs claim BLR1 supports managed Postgres but UI showed only NA/EU regions for fresh accounts (no card on file). Reframed Path 2 in v7 doc as "DO BLR1 reachability is payment-method-gated for new operator accounts." Per the source `path-e-try-before-buy-results.md`: the empirical observation was UI-level (regions hidden until payment authorization), NOT that BLR1 is unavailable. This finding is **still load-bearing**: any future "should we use DO Postgres BLR1?" decision must re-verify with a payment-method-authorized account.
 - **Track 3 (1-week synthetic load)**: NOT STARTED — was scoped as optional follow-up if Phase 2.6 picked Path 6 over Path 1
 
 ---
@@ -186,7 +186,7 @@ Per active `launch-path-execution-playbooks.md`:
 
 **Original framing**: "SEBI 10/sec is per-operator; multi-Kite-app sharding required for 10K-agent capacity."
 **Empirical correction**: SEBI 10/sec is **per (user's-own-Kite-app, user)**. Each user authenticates via THEIR own Kite developer app per BYO-developer-app architecture. **No multi-app sharding needed.** Capacity scales naturally per-user.
-**Verified at**: `kc/riskguard/per_second.go:30-50` (already shards rate-limit by user).
+**Verified at**: `algo2go/kite-mcp-riskguard/per_second.go:30-50` (post Path A.21 promotion — was `kc/riskguard/per_second.go` pre-promotion; already shards rate-limit by user).
 **Implication**: 10K-agent cost ceiling collapsed 75% (₹3.5-4.5L/mo → ~₹50K/mo founder-only).
 
 ### 5.2 IP whitelist reframing (2026-05-06)
@@ -198,9 +198,9 @@ Per active `launch-path-execution-playbooks.md`:
 
 ### 5.3 Phase 2 SQL portability audit (2026-05-09)
 
-**Finding**: across 5 algo2go persistence repos (`kite-mcp-alerts`, `kite-mcp-audit`, `kite-mcp-billing`, `kite-mcp-watchlist`, plus host), only **9 SQL statements** required Postgres-specific placeholder rewriting (`?` → `$1` etc). Phase 2.4 placeholder rewriter handles the rewrite at runtime. **Migration surface is small.**
-**Implication**: Phase 2.x portability is engineering-tractable; not a 6-month project.
-**Reference**: archived `phase-2-sql-portability-audit.md`.
+**Finding** (corrected 2026-05-11 against archived source `phase-2-sql-portability-audit.md:482-493`): **`pgx/v5/stdlib` accepts `?` placeholders transparently — ZERO placeholder rewrite needed for the database/sql stdlib path** (which is what alerts repo uses). The prior STATE.md framing of "9 SQL statements required Postgres-specific placeholder rewriting" contradicted the cited source; the "9 statements" figure refers to total parametrized SQL statements in the migration surface, NOT how many need rewriting. Phase 2.4 placeholder rewriter (`alerts/db_queries.go`) exists as a defensive layer for non-stdlib paths but is not invoked under the stdlib-default flow.
+**Implication**: Phase 2.x portability is engineering-tractable; not a 6-month project. Effective rewrite-cost = 0 statements under default wiring.
+**Reference**: archived `phase-2-sql-portability-audit.md` §"Critical finding".
 
 ### 5.4 libSQL ecosystem maturity caveats (2026-05-10)
 
@@ -377,7 +377,21 @@ One-off investigations + diagnostic findings + retired plans.
 ### 8.5 "11 RiskGuard checks" vs "9 RiskGuard checks" vs "8 RiskGuard checks"
 
 **Source of conflict**: `docs/show-hn-post.md` claims 11 checks. `MEMORY.md` claims 9. Older docs claim 8.
-**Resolution**: **11 is current** per `kc/riskguard/guard.go` — kill-switch, order-value cap ₹50k, qty limit, daily order count 20/day, rate-limit, per-second rate limit, duplicate-within-30s, daily ₹2L notional, idempotency dedup, anomaly μ+3σ, off-hours block + circuit-breaker + global-freeze layers. The "9" memory note pre-dates the idempotency + anomaly + off-hours additions per `kite-security-hardening-2026-04`.
+**Resolution**: **11 is current** per `algo2go/kite-mcp-riskguard/guard.go` (post Path A.21 promotion — was `kc/riskguard/guard.go` pre-promotion) — order-value cap ₹50k, qty limit, daily order count 20/day, rate-limit, per-second rate limit, duplicate-within-30s, daily ₹2L notional, idempotency dedup, confirmation required, anomaly μ+3σ, off-hours block — plus kill-switch + circuit-breaker + global-freeze + auto-freeze + OTR-band + insufficient-margin + market-closed system-rejection layers (17 `RejectionReason` constants total; 11 user-facing pre-trade). The "9" memory note pre-dates the idempotency + anomaly + off-hours additions per `kite-security-hardening-2026-04`.
+
+### 8.7 Dr-drill launch blockers (NEW 2026-05-11)
+
+**Source**: `dr-drill-results-2026-05-11.md` findings #4 + #5 + `research-batch-2026-05-11.md` §C + §D.
+
+**Two operational gaps block playbook Items #1 + #2** (per `launch-path-execution-playbooks.md`):
+
+1. **GitHub repo Actions secrets unset** — the 2026-05-01 monthly cron run (id `25205029746`) failed in 11s at the env-var gate. All 6 secrets (`LITESTREAM_R2_ACCOUNT_ID`, `LITESTREAM_BUCKET`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_DR_CHAT_ID`) inject as empty strings. **Item #1 cannot dispatch until provisioned.** Provision script: `research-batch-2026-05-11.md` §D (six `gh secret set` commands, idempotent).
+
+2. **`cmd/dr-decrypt-probe` source dir does not exist** — `ls cmd/` returns only `event-graph/` + `rotate-key/`. The script `scripts/dr-drill-prod-keys.sh:147-166` references `/tmp/dr-decrypt-probe` binary; script's fallback path mentions `go test ./kc/alerts/ -run TestDRDrill` (synthetic test analog) which DOES exist at `algo2go/kite-mcp-alerts/dr_drill_prod_keys_test.go` as `TestDRDrill_ProductionKeyChain_Synthetic` + `TestDRDrill_WrongSecret_FailsLoudly`. Spec for the missing binary at `research-batch-2026-05-11.md` §C (~1.5h Go implementation, 8-phase logic, exit codes 0/2/5/6).
+
+**Neither blocker is "production is broken"** — Litestream replication to R2 is healthy, salt is preserved, structural restore byte-identical per `dr-drill-results-2026-05-11.md` §1.2. Both are "we have not empirically proven the encrypted-column round-trip end-to-end" gaps.
+
+**Resolution path**: dispatch implements `cmd/dr-decrypt-probe` per §C spec → user pastes 6 secrets via §D script → CI green on next monthly cron OR manual workflow_dispatch trigger.
 
 ---
 
