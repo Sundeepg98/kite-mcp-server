@@ -1,6 +1,6 @@
 package billing
 
-import "github.com/zerodha/kite-mcp-server/kc/domain"
+import "github.com/algo2go/kite-mcp-domain"
 
 // Tier represents a billing subscription level.
 type Tier int

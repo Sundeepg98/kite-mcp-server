@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // newIntegrationGuard creates a Guard backed by in-memory SQLite for persistence tests.

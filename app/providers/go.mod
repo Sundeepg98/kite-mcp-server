@@ -47,7 +47,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-domain v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
@@ -120,7 +120,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/audit => ../../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../../kc/cqrs
-	github.com/zerodha/kite-mcp-server/kc/domain => ../../kc/domain
+	github.com/algo2go/kite-mcp-domain => ../../kc/domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../../kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/instruments => ../../kc/instruments
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../../kc/papertrading

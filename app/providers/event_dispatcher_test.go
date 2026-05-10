@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // event_dispatcher_test.go covers BuildEventSubscriptions. Wave D

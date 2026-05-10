@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // Session status constants — the small set of lifecycle states a session

@@ -15,7 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"

@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // mockBaseline is a test double for the anomaly baseline provider. It lets

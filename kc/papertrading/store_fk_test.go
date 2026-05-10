@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // TestPaperOrders_FK_RejectsOrphan pins the DDD aggregate-boundary invariant:

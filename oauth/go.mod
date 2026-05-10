@@ -61,7 +61,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000 // indirect
-	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-domain v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-logger v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
@@ -78,7 +78,7 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../kc/alerts
-	github.com/zerodha/kite-mcp-server/kc/domain => ../kc/domain
+	github.com/algo2go/kite-mcp-domain => ../kc/domain
 	github.com/zerodha/kite-mcp-server/kc/users => ../kc/users
 	github.com/zerodha/kite-mcp-server/testutil => ../testutil
 )

@@ -10,7 +10,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-broker/mock"
 	zerodha "github.com/algo2go/kite-mcp-broker/zerodha"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // SessionService owns MCP session lifecycle: creation, retrieval, validation,

@@ -11,7 +11,7 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 )

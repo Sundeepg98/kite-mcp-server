@@ -3,7 +3,7 @@ package kc
 import (
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // IsKiteTokenExpired checks if a Kite token stored at the given time has likely expired.

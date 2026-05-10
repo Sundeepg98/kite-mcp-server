@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 	_ "modernc.org/sqlite"
 )
 

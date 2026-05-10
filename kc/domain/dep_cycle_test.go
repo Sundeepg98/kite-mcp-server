@@ -29,7 +29,7 @@ import (
 // and adding a new entry requires a corresponding go.mod replace.
 var allowedUpstreamModules = map[string]string{
 	"github.com/algo2go/kite-mcp-broker":    "broker DTO interop (Holding/Position/Order/Profile)",
-	"github.com/zerodha/kite-mcp-server/kc/domain": "self-package",
+	"github.com/algo2go/kite-mcp-domain": "self-package",
 	"github.com/algo2go/kite-mcp-isttz":  "IST timezone for Session.IsExpired()",
 	"github.com/algo2go/kite-mcp-money":  "Money value object",
 }

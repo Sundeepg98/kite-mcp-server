@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // TestProjector_OrderFlow exercises the full place->modify->fill lifecycle on

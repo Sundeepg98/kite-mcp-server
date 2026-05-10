@@ -1,6 +1,6 @@
 package providers
 
-import "github.com/zerodha/kite-mcp-server/kc/domain"
+import "github.com/algo2go/kite-mcp-domain"
 
 // event_dispatcher.go — Wave D Phase 2 Slice P2.4f. Wires the
 // 36 always-on dispatcher → audit-log subscriptions as an Fx graph

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // internal_checks.go — the 10+ internal check*(...) methods that each

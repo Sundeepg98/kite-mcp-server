@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // lifecycle.go — freeze lifecycle (per-user + global) and the auto-freeze

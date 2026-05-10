@@ -1,7 +1,7 @@
 package eventsourcing
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // AggregateRoot is the interface that all event-sourced aggregates must satisfy.

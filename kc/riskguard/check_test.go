@@ -6,7 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // TestRegisterCustomCheck verifies that a plugin-registered Check:

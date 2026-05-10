@@ -31,7 +31,7 @@
 //     OrderService relocation.
 package ports
 
-import "github.com/zerodha/kite-mcp-server/kc/domain"
+import "github.com/algo2go/kite-mcp-domain"
 
 // SessionPort is the bounded-context contract for MCP session
 // lifecycle operations — creation, lookup, teardown, and the login

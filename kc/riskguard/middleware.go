@@ -6,7 +6,7 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 	"github.com/algo2go/kite-mcp-i18n"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )

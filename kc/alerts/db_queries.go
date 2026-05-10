@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 )
 
 // LoadAlerts reads all alerts from the database grouped by email.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/algo2go/kite-mcp-domain"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

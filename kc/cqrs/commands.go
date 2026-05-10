@@ -6,7 +6,7 @@
 // commands and queries, enabling testable, composable use-case pipelines.
 package cqrs
 
-import "github.com/zerodha/kite-mcp-server/kc/domain"
+import "github.com/algo2go/kite-mcp-domain"
 
 // --- Order commands ---
 
