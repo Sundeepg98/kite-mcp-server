@@ -170,7 +170,21 @@ agents:
 # Cross-agent coordination protocols
 coordination:
   shared_tree:
-    commit: "git commit -o -- <paths>"
+    # IMPORTANT: -m must come BEFORE -o. Git treats `-o -- <paths> -m "..."`
+    # as `<paths>` followed by a stray positional `-m` and the commit
+    # message string, both unmatched against any git option — and errors
+    # with "pathspec '-m' did not match any file(s) known to git". Verified
+    # the recurring gotcha across three sessions; canonical form is:
+    #   git commit -m "..." -o -- <paths>
+    commit: 'git commit -m "..." -o -- <paths>'
+    # NOTE: -o only works for files git already TRACKS. For NEW (untracked)
+    # files, do `git add <paths>` first, then commit. The -m-before-o
+    # ordering still applies to the commit step:
+    #   git add <paths>
+    #   git commit -m "..." -o -- <paths>
+    commit_new_files: |
+      git add <paths>
+      git commit -m "..." -o -- <paths>
     pull: "git pull --ff-only"
     push: "git push origin master (after WSL2 green)"
     forbidden:
