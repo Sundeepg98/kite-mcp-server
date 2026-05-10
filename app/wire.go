@@ -585,7 +585,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			Resolver:   resolver,
 			Dispatcher: eventDispatcher,
 			Logger:     app.logger,
-			// Clock defaults to testutil.RealClock{}; poll/budget use
+			// Clock defaults to clockport.RealClock{}; poll/budget use
 			// production defaults (5s / 60s).
 		})
 		app.fillWatcher.Start()

@@ -6,16 +6,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/algo2go/kite-mcp-clockport"
 	"github.com/zerodha/kite-mcp-server/testutil"
 	"golang.org/x/time/rate"
 )
 
 // ===========================================================================
-// Clock port adapter — bridges testutil.Clock (testutil.Ticker) into the
+// Clock port adapter — bridges clockport.Clock (clockport.Ticker) into the
 // package-local rlClock (rlTicker) interface. The two are structurally
 // identical; an adapter is required only because Go interface satisfaction
-// does not follow through generic parameterisation — `testutil.Clock`'s
-// NewTicker returns `testutil.Ticker`, but `rlClock.NewTicker` must return
+// does not follow through generic parameterisation — `clockport.Clock`'s
+// NewTicker returns `clockport.Ticker`, but `rlClock.NewTicker` must return
 // `rlTicker` (its own package-local type). Adapter is 6 lines, trivial.
 // ===========================================================================
 
@@ -25,7 +26,7 @@ func (a fakeClockAdapter) NewTicker(d time.Duration) rlTicker {
 	return fakeTickerAdapter{t: a.fc.NewTicker(d)}
 }
 
-type fakeTickerAdapter struct{ t testutil.Ticker }
+type fakeTickerAdapter struct{ t clockport.Ticker }
 
 func (a fakeTickerAdapter) C() <-chan time.Time { return a.t.C() }
 func (a fakeTickerAdapter) Stop()               { a.t.Stop() }

@@ -7,7 +7,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/testutil"
+	"github.com/algo2go/kite-mcp-clockport"
 )
 
 // fill_watcher.go — real-flow bridge for domain.OrderFilledEvent.
@@ -127,7 +127,7 @@ type FillWatcherConfig struct {
 	Resolver     FillWatcherBrokerResolver
 	Dispatcher   *domain.EventDispatcher
 	Logger       *slog.Logger
-	Clock        testutil.Clock // nil => testutil.RealClock{}
+	Clock        clockport.Clock // nil => clockport.RealClock{}
 	PollInterval time.Duration  // default: 5 * time.Second
 	MaxDuration  time.Duration  // default: 60 * time.Second
 }
@@ -140,7 +140,7 @@ type FillWatcher struct {
 	resolver     FillWatcherBrokerResolver
 	dispatcher   *domain.EventDispatcher
 	logger       *slog.Logger
-	clock        testutil.Clock
+	clock        clockport.Clock
 	pollInterval time.Duration
 	maxDuration  time.Duration
 
@@ -166,7 +166,7 @@ type FillWatcher struct {
 func NewFillWatcher(cfg FillWatcherConfig) *FillWatcher {
 	clock := cfg.Clock
 	if clock == nil {
-		clock = testutil.RealClock{}
+		clock = clockport.RealClock{}
 	}
 	pollInterval := cfg.PollInterval
 	if pollInterval <= 0 {
@@ -268,7 +268,7 @@ func (w *FillWatcher) Wait(timeout time.Duration) {
 // ticker is owned here — Watch creates it on the caller goroutine for
 // the FakeClock race-safety reason documented on Watch. The loop
 // stops the ticker on any exit path.
-func (w *FillWatcher) pollLoop(placed domain.OrderPlacedEvent, ticker testutil.Ticker) {
+func (w *FillWatcher) pollLoop(placed domain.OrderPlacedEvent, ticker clockport.Ticker) {
 	defer w.wg.Done()
 
 	start := w.clock.Now()

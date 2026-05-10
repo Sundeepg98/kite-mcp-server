@@ -7,6 +7,7 @@ require (
 	github.com/algo2go/kite-mcp-audit v0.1.0
 	github.com/algo2go/kite-mcp-billing v0.1.0
 	github.com/algo2go/kite-mcp-broker v0.1.0
+	github.com/algo2go/kite-mcp-clockport v0.1.0
 	github.com/algo2go/kite-mcp-cqrs v0.1.0
 	github.com/algo2go/kite-mcp-decorators v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0

@@ -31,17 +31,38 @@ go 1.25.0
 // a test-helper surface plus one production usage in kc/fill_watcher
 // (testutil.Clock/Ticker for fake-clock injection in fill polling).
 require (
-	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-instruments v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/algo2go/kite-mcp-riskguard v0.1.0
+	github.com/stretchr/testify v1.10.0
+	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 )
 
-require github.com/zerodha/gokiteconnect/v4 v4.4.0
+require (
+	github.com/algo2go/kite-mcp-clockport v0.1.0
+	github.com/zerodha/gokiteconnect/v4 v4.4.0
+)
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/algo2go/kite-mcp-alerts v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-audit v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-billing v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-cqrs v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-domain v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-eventsourcing v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-i18n v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-oauth v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-papertrading v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-registry v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-templates v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-ticker v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-usecases v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-users v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-watchlist v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
@@ -66,23 +87,6 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/stripe/stripe-go/v82 v82.5.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-alerts v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-audit v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-billing v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-cqrs v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-domain v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-eventsourcing v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-i18n v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-papertrading v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-registry v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-templates v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-ticker v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-usecases v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-users v0.1.0 // indirect
-	github.com/algo2go/kite-mcp-watchlist v0.1.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/net v0.49.0 // indirect
@@ -99,6 +103,4 @@ require (
 	modernc.org/sqlite v1.46.1 // indirect
 )
 
-replace (
-	github.com/zerodha/kite-mcp-server => ../
-)
+replace github.com/zerodha/kite-mcp-server => ../

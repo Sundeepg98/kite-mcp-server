@@ -7,38 +7,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algo2go/kite-mcp-clockport"
 )
 
-func TestRealClock_NowMonotonic(t *testing.T) {
-	t.Parallel()
-	c := RealClock{}
-	before := c.Now()
-	time.Sleep(time.Millisecond)
-	after := c.Now()
-	assert.True(t, !after.Before(before), "RealClock.Now should not move backward")
-}
 
-func TestRealClock_Ticker(t *testing.T) {
-	t.Parallel()
-	c := RealClock{}
-	tk := c.NewTicker(5 * time.Millisecond)
-	defer tk.Stop()
-	select {
-	case <-tk.C():
-		// Got a tick — pass.
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("real ticker did not fire within 500ms")
-	}
-}
-
-func TestRealTicker_StopIdempotent(t *testing.T) {
-	t.Parallel()
-	tk := RealClock{}.NewTicker(time.Second)
-	// Triple Stop must not panic.
-	tk.Stop()
-	tk.Stop()
-	tk.Stop()
-}
+// TestRealClock_* tests live in github.com/algo2go/kite-mcp-clockport
+// alongside the production port + RealClock implementation. This file
+// covers the FakeClock test fakes only.
 
 func TestFakeClock_NowStartsAtSeed(t *testing.T) {
 	t.Parallel()
@@ -180,9 +156,9 @@ func TestFakeClock_NewTickerZeroDurationReturnsClosedTicker(t *testing.T) {
 	tk.Stop()
 }
 
-// Clock interface smoke test: RealClock and *FakeClock both implement.
+// Clock interface smoke test: *FakeClock implements clockport.Clock.
+// (RealClock-side coverage lives in github.com/algo2go/kite-mcp-clockport.)
 func TestClockInterfaceCompatibility(t *testing.T) {
 	t.Parallel()
-	var _ Clock = RealClock{}
-	var _ Clock = NewFakeClock(time.Now())
+	var _ clockport.Clock = NewFakeClock(time.Now())
 }

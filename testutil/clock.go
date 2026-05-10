@@ -1,19 +1,19 @@
-// Package testutil provides a minimal clock port so production code that
-// depends on wall-clock behavior (timers, periodic tickers, "now" reads)
-// can be exercised synchronously in tests.
+// Package testutil hosts in-memory test fakes for the production ports
+// defined in github.com/algo2go/kite-mcp-clockport. Production code does
+// NOT import testutil; only _test.go files do.
 //
-// The port is intentionally tiny — just enough to swap time.Now and
-// time.NewTicker in the call sites that currently force tests to use
-// time.Sleep. The riskguard package already has its own
-// `type Clock func() time.Time` with a SetClock hook for the "now" case;
-// this port adds the missing piece — a testable Ticker — so rate-limit
-// and scheduler-style cleanup goroutines can be driven forward without
-// wall-clock waits.
+// FakeClock + fakeTicker provide a deterministic implementation of
+// clockport.Clock + clockport.Ticker that advances only when Advance()
+// is called. This lets rate-limit / scheduler-style goroutines be
+// driven forward without wall-clock waits.
 //
-// Production defaults to RealClock{} which is the zero-value choice;
-// tests inject a FakeClock via constructor options or SetClock setters.
+// The matching production port + RealClock implementation live at
+// github.com/algo2go/kite-mcp-clockport (Path A.27, 28th algo2go
+// module). The split is documented at
+// .research/testutil-clock-port-split-design.md (commit fa6c70a) and
+// .research/path-a-27-clockport-pick.md (this commit).
 //
-// What this port does NOT help with:
+// What this fake does NOT help with:
 //   - Sleeps that wait for external I/O (TCP bind, HTTP server readiness,
 //     SQLite worker drain). A fake clock cannot make the OS bind faster;
 //     those sleeps stay and belong to integration-test scope.
@@ -22,56 +22,14 @@ package testutil
 import (
 	"sync"
 	"time"
+
+	"github.com/algo2go/kite-mcp-clockport"
 )
-
-// Clock is the minimal time-source port. The two methods we need today
-// are Now (wall time) and NewTicker (a channel that fires at intervals).
-// Callers who also need Sleep can layer it on top of NewTicker + receive.
-type Clock interface {
-	// Now returns the current time as perceived by this clock.
-	Now() time.Time
-	// NewTicker returns a Ticker that fires at the given interval. Stop
-	// must be called by the caller to release resources.
-	NewTicker(d time.Duration) Ticker
-}
-
-// Ticker abstracts the tick channel + Stop pair. The real implementation
-// wraps *time.Ticker; the fake implementation delivers ticks when
-// FakeClock.Advance crosses the interval boundary.
-type Ticker interface {
-	// C returns the channel on which ticks are delivered.
-	C() <-chan time.Time
-	// Stop stops the ticker. It is safe to call multiple times.
-	Stop()
-}
-
-// ---------------------------------------------------------------------
-// Real implementation — thin wrapper around the stdlib time package.
-// ---------------------------------------------------------------------
-
-// RealClock is the production clock. Zero-value is ready to use; no
-// constructor needed.
-type RealClock struct{}
-
-// Now returns time.Now().
-func (RealClock) Now() time.Time { return time.Now() }
-
-// NewTicker returns a real time.Ticker wrapped to satisfy the Ticker
-// interface.
-func (RealClock) NewTicker(d time.Duration) Ticker {
-	return &realTicker{t: time.NewTicker(d)}
-}
-
-type realTicker struct {
-	t    *time.Ticker
-	once sync.Once
-}
-
-func (r *realTicker) C() <-chan time.Time { return r.t.C }
-func (r *realTicker) Stop()               { r.once.Do(r.t.Stop) }
 
 // ---------------------------------------------------------------------
 // Fake implementation — deterministic, advances only via Advance.
+// Implements clockport.Clock (structural typing — no explicit declaration
+// needed; the var-_-clockport.Clock assertion in clock_test.go enforces it).
 // ---------------------------------------------------------------------
 
 // FakeClock is a test clock whose time only moves when Advance is called.
@@ -103,7 +61,7 @@ func (f *FakeClock) Now() time.Time {
 
 // NewTicker registers a ticker that fires when Advance crosses the given
 // interval. Stop removes it from the registry.
-func (f *FakeClock) NewTicker(d time.Duration) Ticker {
+func (f *FakeClock) NewTicker(d time.Duration) clockport.Ticker {
 	if d <= 0 {
 		// Match stdlib semantics: time.NewTicker panics on d<=0. We
 		// return a ticker with a closed channel instead of panicking so

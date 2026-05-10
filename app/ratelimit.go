@@ -102,10 +102,13 @@ func (l *userRateLimiter) cleanup() {
 // tests inject a fake via newRateLimiters(withClock(...)) so the cleanup
 // goroutine can be driven synchronously without time.Sleep.
 //
-// Defined locally rather than imported from testutil to avoid a
-// test-util → production dependency in the prod build graph; any type
-// that structurally satisfies this interface (testutil.FakeClock does)
-// can be passed in by tests.
+// Defined locally rather than imported from clockport so this package
+// can keep its own minimal interface shape (rlClock returns rlTicker, a
+// package-local type used by the cleanup goroutine). Any type that
+// structurally satisfies this interface (testutil.FakeClock — which
+// implements clockport.Clock — does, via the fakeClockAdapter +
+// fakeTickerAdapter pair in ratelimit_cleanup_test.go) can be passed
+// in by tests.
 type rlClock interface {
 	NewTicker(d time.Duration) rlTicker
 }
