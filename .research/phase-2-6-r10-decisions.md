@@ -1,450 +1,399 @@
-# Phase 2.6 — R-10 User Decision Re-Research (v6 — Empirical Synthesis Post-Track-1)
+# Phase 2.6 — R-10 User Decision Re-Research (v7 — Falsification Reckoning + Binary)
 
 **Date**: 2026-05-10 IST
-**HEAD**: `31e2638` (this doc supersedes v5; v5 was strategic synthesis pre-Track-1; v6 folds Track 1 empirical results)
-**Charter**: doc-only synthesis; NO source mutations. v6's primary job: reconcile v1-v5 paper analysis with **actual measured Track 1 data**.
-**Builds on / supersedes**: v5 R-10 doc at `19357d6` + Track 1 results at `31e2638`. v6 supersedes v1→v5.
+**HEAD**: post-`67d1d7f` (this doc supersedes v6 after Track 2 falsification of DO BLR1 reachability)
+**Charter**: doc-only synthesis; NO source mutations. v7's job: reckon with what Track 2 falsification means for v1-v6 confidence, audit "WebFetch verified" claims, collapse 8 paths to a BINARY decision.
+**Builds on / supersedes**: v6 R-10 doc at `67d1d7f` + Track 2 falsification finding (UI showed only NA/EU regions; BLR1 not surfaced for fresh account despite docs claiming availability).
 
 **Production state**: v266 LIVE; SQLite + Litestream → R2; ALERT_DB_DRIVER unset; **0 paid users**.
 
-**Empirical baseline (Track 1, 2026-05-10)**:
-- Turso `phase-2-6-canary` provisioned in `aws-ap-south-1` (Mumbai), Free tier
-- 4 hello-world rounds via Go `libsql-client-go` driver from WSL2 on Indian residential broadband
-- Cold-start: 2.31s (first table create + first inserts)
-- Warm-state: 54-86ms INSERT, 33-39ms SELECT, 0.5ms Ping
+---
+
+## Section 0 — TL;DR (v7 — crispest of all rounds)
+
+**The decision is binary**: **adopt Path 6 (Turso ap-south-1 Free)** OR **stay Path 1 (SQLite + Litestream → R2)**.
+
+All other paths are eliminated by empirical evidence:
+- Path 2 (DO BLR1) — **FALSIFIED**. Docs say BLR1 supports managed Postgres; Track 2 UI did not surface BLR1 for our fresh account. Region picker showed ONLY NA/EU. **Paper-truth ≠ UI-truth.** Cannot verify Path 2 without account-tier escalation OR sales contact.
+- Path 3 (AWS RDS Mumbai) — Higher friction (AWS account creation, IAM setup); not yet validated; same "paper might not equal UI" risk.
+- Path 5 (Self-host Fly Volume BOM) — Defensible but ops-heavy; v6 estimated 1.5-2 hrs/mo at canary; not validated.
+- Path 7 (Yotta SutraDB) — Sales-only signup; cannot validate without phone call.
+- Paths 4, 8, 9, 10, 11, 12 — already excluded in v3-v6 for various reasons.
+
+**v7's recommendation**: **adopt Path 6 NOW** — Track 1 empirically validated it works at Mumbai region with Free tier; the engineering work is ~4-6h to wire libSQL driver into `app/providers/alertdb.go` factory; reversible to Path 1 in <5 min.
+
+**v7's methodology lesson**: WebFetch + Context7 verification is **paper-truth**. Provisioning-attempt verification is **UI-truth**. v4 conflated them. Track 1 succeeded because Turso UI matched docs; Track 2 failed because DO UI did NOT match docs. **Future verification claims must distinguish "documented availability" from "actually-provisionable for this account".**
 
 ---
 
-## Section 0 — TL;DR (v6 — empirical-grounded)
+## Section 1 — Track 2 Falsification: What Actually Happened
 
-Track 1 succeeded. Path 6 (Turso `aws-ap-south-1`) is now **empirically validated**, not just paper-projected. v5's bimodal recommendation collapses asymmetrically:
+### 1.1 Empirical sequence
 
-**Path 6 (Turso Free) is now the strongest recommendation** because:
-1. Mumbai region works (verified visually in dashboard region picker, then via routing-suffix in connection URL)
-2. Free tier truly $0 — no payment-method-on-file required (unlike DO BLR1 which requires international card)
-3. Hello-world round-trip succeeded; latency 54-86ms write / 33-39ms read is acceptable for our usage profile
-4. PITR is BUILT INTO the Free tier UI (verified — "Create From Point-in-Time" button visible) — NOT a paid add-on as Supabase does
-5. Total signup-to-first-query: ~10 minutes
-6. Switch cost back to SQLite: <1 hour (revert ALERT_DB_DRIVER); switch cost forward to Postgres: 1-2 weeks (v5-corrected estimate)
+1. v4 doc cited Context7-verified DO release notes: "Managed databases for MySQL and Redis are now available in the SGP1, BLR1, and TOR1 regions" (release note dated "4 September").
+2. v4 ALSO cited DO availability docs: BLR1 listed for managed PostgreSQL.
+3. v4 conclusion: "DO BLR1 PostgreSQL = $15.15/mo with 11ms latency to Mumbai" (the latency number from a separate Bash ping to `blr1.digitaloceanspaces.com`, NOT from a real provisioned DO Postgres in BLR1).
+4. v6 carried this forward as Path 2's grounding.
+5. Track 2 attempted actual provisioning: signup → onboarding questionnaire → Create Database page with PostgreSQL engine selected → region picker.
+6. Region picker showed **only 12 NA/EU options**: NYC1/2/3, SFO2/3, TOR1, LON1, AMS3 (active) + SFO1, ATL1, RIC1, AMS2 (disabled).
+7. DOM-search for "BLR1", "Bangalore", "SGP1", "Singapore", "SYD1", "Sydney", "Mumbai", "BOM", "Frankfurt", "FRA1": **0 hits across entire rendered page**.
 
-**Path 1 (Defer) still defensible** — at 0 paid users, doing nothing is also fine. But v6's framing shift: **"defer" is now harder to justify** because Path 6 became near-zero-friction empirically. The cost of switching from "defer (SQLite)" to "Path 6 Turso Free" is ~4-6 hours engineering (Track 1 took ~15 min for the test + Phase 2.x driver factory already shipped at v262); doing it now while frictionless is cheaper than doing it later under user-count pressure.
+### 1.2 Cross-checking after Track 2
 
-**Track 2 (DO BLR1) is now optional** — Track 1 made it largely redundant for the canary decision. Track 2 would still resolve "what does Postgres look like at our scale" if user wants comparison data for Phase 3 multi-cell planning, but not for choosing Phase 2.6 canary.
+v7 re-fetched DO docs to verify v4's claim:
+- `docs.digitalocean.com/products/databases/postgresql/details/availability/` (last edited 23 Apr 2026): explicitly lists BLR1 alongside SGP1, SYD1, FRA1 for managed PostgreSQL.
+- `docs.digitalocean.com/platform/regional-availability/`: confirms PostgreSQL Managed Databases available in all 14 datacenters including BLR1.
+- **No documented account-tier restriction.**
 
-**v6's new primary recommendation**: **Adopt Path 6 (Turso Free) as the canary now** — not as a "Phase 2.6 dispatch" event with stages, but as a low-friction first-step that validates the Postgres-or-libSQL future without committing to either. Cost: $0; calendar: 1 afternoon to integrate; reversibility: <1 hour.
+### 1.3 The paper-vs-UI gap
 
----
-
-## Section 1 — Track 1 Empirical Results vs v5 Predictions
-
-### 1.1 Predictions confirmed
-
-| v5 prediction | Track 1 reality |
+| Source | BLR1 PostgreSQL? |
 |---|---|
-| Mumbai region available (`aws-ap-south-1`) | CONFIRMED (region picker UI showed AWS Locations including Mumbai) |
-| Free tier covers our usage 1500x over | CONFIRMED (no quota warnings; Activity counters all 0 after fresh DB) |
-| Free tier truly free, no payment method | CONFIRMED ("No payment methods found" on Billing page; no upgrade prompts) |
-| 4-6 hours to deploy first canary | CONFIRMED (~15 min for the hello-world; full integration would be ~4-6h) |
-| Switch cost back to SQLite trivial | CONFIRMED (just unset env vars; nothing in repo changed for Track 1) |
-| PITR included in Free tier (90 days for Pro per v4) | CONFIRMED dashboard exposes "Create From Point-in-Time" button on Free tier |
+| DO availability docs | YES (paper-truth) |
+| DO regional-availability matrix | YES (paper-truth) |
+| Context7 release notes archive | YES for MySQL/Redis (4 September); v4 extrapolated to PG |
+| DO Create Database UI (our fresh account) | **NO** (UI-truth) |
 
-### 1.2 Predictions UPDATED by empirical data
+### 1.4 Possible explanations for the gap
 
-| v5 prediction | Track 1 update |
-|---|---|
-| "Auto-suspend deal-breaker question" | PARTIALLY ANSWERED: warm performance returns immediately within 5min activity windows; true 24h+ idle behavior still unverified (Track 3 work). At 5-user canary with sustained activity, no auto-suspend triggers. |
-| Path 6↔Path 2 switch = 4-6 weeks (v4) → 1-2 weeks (v5) | UNCHANGED — Track 1 didn't test this directly. v5's correction stands. |
-| Cold-start latency could be 500-1000ms | CONFIRMED (~2.3s on Run 1 — first table-create overhead; consistent with libSQL hot-path warming). After Run 1, warm queries return in tens-of-ms. |
+1. **Account-tier gating** (undocumented): fresh accounts limited to NA/EU.
+2. **Capacity-constrained**: BLR1 at temporary capacity limit; UI hides unavailable regions.
+3. **Engine-specific**: DO offers PostgreSQL in SOME regions but not BLR1 for this engine; release-notes archive only confirmed MySQL+Redis.
+4. **Fraud-prevention**: new accounts with first payment method may face rolling-trust restrictions.
 
-### 1.3 Predictions NOT yet tested (Track 3 work)
+**v7 cannot resolve which explanation is correct without DO support contact.** What v7 CAN say: **BLR1 PostgreSQL is NOT empirically reachable for our specific account at this specific moment**.
 
-| v5 prediction | Track 3 needed |
-|---|---|
-| 1-week sustained behavior | Run synthetic load 5 users × 100 reads/day × 50 writes/day × 7 days; measure quota usage + auto-suspend |
-| Real BOM↔Turso latency under sustained load | Run from Fly BOM machine (not just local WSL2) |
-| pg_dump/restore fidelity for libSQL → Postgres if we switch later | Phase 2.4 round-trip test framework already built; just need to run with Turso-as-source |
+### 1.5 Why this matters
 
-### 1.4 What Track 1 DID NOT predict but should be flagged
-
-**The Turso UI labeling inconsistency** (workspace badge says "Free" / billing page says "Starter") wasn't in any v1-v5 doc because Context7 + WebFetch couldn't surface it. **Empirical UI exploration found it.** Functionally a non-issue ($0 either label) but a quirk worth knowing.
-
-**Token rotation friction**: token displayed once, then never shown again. If lost, must "Invalidate All Tokens" + create fresh. Operational implication: token-rotation cadence requires deliberate workflow (vs Postgres password reset which is restart-only).
+If we had committed to Path 2 (DO BLR1) based on v4's "verified" claim, we'd have hit this UI block at production time, post-engineering-investment, with deploy timeline pressure. **The paper-verification was a near-miss.** Track 2 caught it pre-commitment.
 
 ---
 
-## Section 2 — Latency Numbers in Context
+## Section 2 — Verification Confidence Audit (Re-tagging All v4-v6 Claims)
 
-### 2.1 Comparison to current SQLite-local baseline
+v4-v6 used "Context7 verified" / "WebFetch verified" / "Knowledge baseline" tags. v7 introduces a stricter tier:
 
-| Operation | Current (SQLite local on Fly volume) | Path 6 Turso warm | Latency multiplier |
-|---|---|---|---|
-| `Ping` / SELECT 1 | ~0.05ms | 0.5ms | ~10x |
-| `INSERT` per row | ~0.5-1ms (modernc.org/sqlite + WAL) | 54-86ms | **~50-150x** |
-| `SELECT` 5 rows | ~0.5-1ms | 33-39ms | **~30-80x** |
-| `CREATE TABLE` (DDL) | ~5-10ms | 215-231ms warm | ~25x |
-
-### 2.2 Is the latency increase user-visible?
-
-Our actual access pattern (per Phase 2.5 runbook + v5 estimates):
-
-| Tool category | Calls/day per user | Latency budget per call | Total per user/day |
-|---|---|---|---|
-| `get_holdings`, `get_positions` (read) | ~10 | <500ms acceptable | 10 × 35ms = 350ms total |
-| `get_alerts` (read) | ~100 | <500ms acceptable | 100 × 35ms = 3.5s total |
-| `record_audit` (write — async) | ~50 | <500ms acceptable | 50 × 70ms = 3.5s total |
-| `place_order` (write — sync, blocking) | ~5 | **<200ms desirable** for trade UX | 5 × 70ms = 350ms total |
-
-**At 5 users × these volumes**: total per-user/day cumulative DB time = ~7 seconds spread across 200+ calls. **Per-call latency is the question, not aggregate.**
-
-**Per-call latency analysis**:
-- **Read paths (35ms)**: imperceptible to user. UI loads <500ms; 35ms DB latency is a small fraction.
-- **Async writes (audit log, alert checks)**: 70ms behind a goroutine — user never waits.
-- **Sync writes (place_order)**: 70ms is a small fraction of typical 1-3s order-placement latency to broker. Not user-visible against the broker round-trip.
-
-**Verdict: empirically NOT user-visible at our usage pattern.** The 50-150x INSERT latency multiplier is real but the absolute number (54-86ms) is well under all UX thresholds.
-
-### 2.3 What WOULD be user-visible
-
-- **Cold-start (2.3s) on first request after long idle** — if Turso auto-suspends after 24h+ idle (Track 3 unverified), the first user request post-idle would feel slow. At 5+ active users, never idle, this never triggers. **At 1-user-canary or test/dev account, this could trigger if idle overnight.**
-- **Burst INSERT** (e.g., scheduled job writing 1000 rows): at 70ms each = 70 seconds; would need batching. Our actual pattern is interactive (<10 INSERTs per user-action), so this isn't a real issue.
-- **Network partition**: if BOM↔aws-ap-south-1 routing breaks, app errors. Currently SQLite local has no such failure mode. **Trade-off accepted in exchange for managed PITR + replication.**
-
-### 2.4 Where this leaves us
-
-Track 1's latency numbers are **acceptable for canary AND production** at our access pattern. The "this might be too slow" concern v3-v5 worried about doesn't materialize empirically.
-
----
-
-## Section 3 — What Track 2 (DO BLR1) Would Actually Tell Us
-
-After Track 1's success, what does Track 2 add?
-
-### 3.1 What Track 2 would empirically establish
-
-| Question | Track 2 answers? |
-|---|---|
-| Does Postgres work in BLR1 region from Mumbai broadband? | YES (would measure ping + connection latency) |
-| What's the real INR-billed cost with GST? | YES (provisioning shows actual invoice) |
-| What's PgBouncer connection-pool behavior at $15/mo tier? | YES (22-connection limit per v4) |
-| Does ON CONFLICT ... DO UPDATE work as expected on real Postgres? | YES (Phase 2.4 round-trip test would run against DO instead of mock) |
-| What's typical latency vs Turso? | YES (likely similar 30-80ms range; same cross-cloud-region overhead) |
-
-### 3.2 What Track 2 WOULD NOT change about the recommendation
-
-Track 1 already established:
-- Mumbai region works → Track 2 would confirm same for BLR1 (already verified via 11ms ping in v4)
-- PITR + extensions work → Track 2 would confirm same for DO Postgres (DO docs already verified)
-- Switch cost trivial → Track 2 wouldn't move this needle
-
-**Track 2's incremental information value at this point is LOW.** v5 had it as "validate before commit"; Track 1's success makes it "validate-also-as-redundancy".
-
-### 3.3 When Track 2 IS worth doing
-
-If user is committing to **Path 2 (Postgres-future)** and wants empirical baseline before that commitment:
-- Stage 5+ scale (>10 paid users) where we'd flip to AWS RDS
-- Phase 3 multi-cell architecture where multiple BLR1 instances might be needed
-- NSE empanelment compliance — wanting Mumbai-region Postgres path baseline before regulatory paper trail starts
-
-**For NONE of these does Track 2 need to happen NOW.** Track 1 is sufficient for canary.
-
-### 3.4 Track 2 cost-benefit
-
-- **Cost**: ~$4-5 prorated DO BLR1 trial + ~30 min engineering + payment-method entry friction
-- **Information value**: low (everything Track 2 measures was already verified via Track 1 patterns or v4 docs)
-- **Decision impact**: probably zero (would not flip recommendation from Path 6 to Path 2 unless Track 2 surfaced a Turso-only failure mode I haven't anticipated)
-
-**Honest call**: **skip Track 2** unless user specifically wants Postgres baseline for Phase 3 planning. The decision-relevant data is in Track 1.
-
----
-
-## Section 4 — Updated Strategic Recommendation (v6)
-
-### 4.1 v5 said "Don't decide yet". Does that still hold?
-
-v5's argument: Phase 2.6 has no user-visible benefit at 0 paid users; defer.
-
-**v6 challenges this**: Track 1 made Path 6 nearly free to adopt (~4-6h engineering, $0 recurring). The "defer" framing assumed Phase 2.6 dispatch had non-trivial cost. Track 1 evidence: it doesn't.
-
-**Reframe**: instead of "defer Phase 2.6 (the staged-rollout)", do **"adopt Path 6 Turso Free as canary now without staging"**. The full Phase 2.6 process (12-16 weeks, 6 stages, success thresholds) was designed for swapping a production user-facing storage backend. **At 0 paid users, that ceremony is overkill** — there are no users whose experience needs gradual migration.
-
-**v6's redefined "adopt Path 6 now"** means:
-1. Spend 4-6 hours integrating Turso into kite-mcp-server's `ProvideAlertDB` factory (bumping `ALERT_DB_DRIVER` env var to support `turso` like it supports `sqlite` and `postgres`)
-2. Configure self-hosted Fly app's env to point at Turso `phase-2-6-canary` DB (already provisioned at no cost)
-3. Continue using SQLite + Litestream for safety net via parallel-write OR (simpler) just keep `ALERT_DB_DRIVER=sqlite` until ready to flip
-4. Flip the env var when convenient — the "canary" is just our own test account
-5. If ANY issue arises, flip env back to `sqlite` (rollback in <5 minutes)
-
-**This is NOT Phase 2.6 staged rollout. This is "use the validated infrastructure at zero-user state".**
-
-### 4.2 The strategic-priority calculation
-
-v5 said: launch path > Phase 2.6 at 0 paid users.
-
-**v6 nuances**: launch path > 12-week-Phase-2.6-staged-rollout. But launch path COMPATIBLE with 4-6h-Path-6-adoption because:
-- Path 6 adoption doesn't gate launch (we're not waiting for Postgres to deploy users; we're validating optionality)
-- The 4-6 hours can fit a single afternoon
-- It removes Phase 2.6 from the future-trigger-firing-emergency-list (Path 6 is empirically tested, ready to scale)
-
-**v6 recommendation**: **don't trade off launch path against Path 6 adoption**. Do both — the latter is small enough to fit alongside the former.
-
-### 4.3 But wait — is Path 6 actually right OR should we also consider Path 1 forever?
-
-**The question**: does Track 1 evidence make Path 6 unconditionally better than Path 1 (defer)?
-
-**Path 1 advantages** (still true):
-- Zero ongoing cost ($0 across both — Turso Free is also $0, but Path 1 has even less mental overhead)
-- Zero new infrastructure to monitor
-- SQLite local is sub-ms latency (vs Turso 35-86ms)
-- No vendor dependency (Turso could change pricing or shut down)
-- Litestream → R2 backup already battle-tested in our v189-v266 production
-
-**Path 6 advantages** (Track 1-confirmed):
-- Mumbai region with managed PITR (vs Litestream snapshot model)
-- Multi-region replication available (Turso's branching feature)
-- Skip Phase 2.6 ceremony forever (driver is ready; no future migration needed)
-- Empirically validated; not a hypothetical migration
-
-**The honest tradeoff**: **Path 1 is operationally simpler**; **Path 6 is strategically more flexible**. At 0 paid users, both are defensible. **The choice is "do you want to incrementally invest in optionality OR keep things minimal"**.
-
-**v6's split recommendation**:
-- **If user is comfortable accumulating optionality**: adopt Path 6 Turso Free as a parallel-deployed canary on test/dev account; sustain it for 1+ months; flip to "primary backend when comfortable"
-- **If user wants to minimize moving parts**: stay Path 1 (defer); revisit at trigger event
-
-**Both are correct answers.** v6's contribution: empirical evidence that Path 6 is now low-friction enough that the "stay Path 1 forever" anti-Path-6 argument is weakened.
-
----
-
-## Section 5 — Stress-Testing v5's "Still Gated" Framing
-
-### 5.1 What v5 said is gated
-
-v5 listed Phase 2.6 dispatch readiness items:
-- R-10.1 Provider — empirically validated as Path 6 by Track 1
-- R-10.2 Provisioning — Track 1 used flyctl-equivalent (Turso UI); minimal ops
-- R-10.3 Canary user — at 0 paid users, "the canary user is us / test account"
-- R-10.4 Rollback SLA — at 0 paid users, "incident downtime affects 0 users"
-- R-10.5 Migration window — at 0 paid users, "any time is fine"
-- R-10.6 Success criteria — at 0 paid users, simplifies to "build still passes; admin login works"
-
-### 5.2 Honest assessment per item at 0 paid users
-
-| R-10 item | At 0 paid users, this matters? | Track 1 changed it? |
+| Tier | Definition | Examples |
 |---|---|---|
-| R-10.1 Provider | YES — pick affects future flexibility | YES (Path 6 validated empirically) |
-| R-10.2 Provisioning | NO — manual is fine for one DB | YES (Track 1 showed UI is fast) |
-| R-10.3 Canary user | NO (no users to gradually flip) | N/A |
-| R-10.4 Rollback SLA | NO (no users to recover) | N/A |
-| R-10.5 Migration window | NO (anytime is fine) | N/A |
-| R-10.6 Success criteria | YES but simpler ("does it work?") | YES (Track 1 confirmed it works) |
+| **REAL-EMPIRICAL** | Provisioned + queried successfully on actual account | Track 1 Turso ap-south-1 |
+| **PAPER-VERIFIED** | Docs/release-notes confirm but not provisioning-tested for OUR account | Most v4 claims |
+| **KNOWLEDGE-BASELINE** | Common knowledge, not explicitly verified this round | AWS RDS pricing details |
+| **FALSIFIED** | Paper-claimed but Track-attempt failed | DO BLR1 PostgreSQL availability |
+| **NOT-TESTABLE-WITHOUT-ACTION** | Requires user-side action (sales call, lawyer, phone) | Yotta operational details, SEBI compliance |
 
-**Conclusion**: at 0 paid users, only R-10.1 (provider) and R-10.6 (success criteria) actually matter. Both are now answered by Track 1.
+### 2.1 Re-tagged v4-v6 claims
 
-**v5's "still gated" framing was anchored on 100+ paid user assumptions.** At 0 paid users, the gate is largely already cleared.
+| Claim | v4 tag | v7 tag |
+|---|---|---|
+| DO Managed PG pricing $15.15/mo Basic 1GB | WebFetch verified | **REAL-EMPIRICAL** (Track 2 saw the price in UI even though couldn't provision in BLR1) |
+| DO BLR1 PostgreSQL availability | WebFetch verified | **FALSIFIED** (Track 2 UI didn't show BLR1) |
+| DO BLR1 latency 11ms from Mumbai broadband | "Bash ping verified" | **PAPER-VERIFIED** (the ping was to `blr1.digitaloceanspaces.com` Cloudflare-edged URL, NOT a provisioned DB in BLR1; latency to actual DO BLR1 Postgres unknown) |
+| DO BLR1 PITR 7 days | WebFetch verified | **PAPER-VERIFIED** (docs say 7 days; couldn't confirm in UI without provisioning) |
+| DO BLR1 connection limits 22-997 per RAM tier | WebFetch verified | **REAL-EMPIRICAL** (Track 2 UI showed exact "Connection limit: 22" for 1GB plan) |
+| Turso pricing (Free $0, Developer $4.99, Scaler $24.92, Pro $416.58) | WebFetch verified | **REAL-EMPIRICAL** (Track 1 confirmed Free tier; paid tiers still PAPER-VERIFIED) |
+| Turso Mumbai region | Context7 verified | **REAL-EMPIRICAL** (Track 1 dashboard showed AWS AP South Mumbai option, provisioned successfully) |
+| Yotta SutraDB ₹1,897.50/core/month | WebFetch verified | **PAPER-VERIFIED** + **NOT-TESTABLE-WITHOUT-ACTION** (sales-only signup) |
+| AWS RDS ap-south-1 db.t4g.micro pricing | WebSearch general | **KNOWLEDGE-BASELINE** (Vantage shows general; ap-south-1 specific never extracted) |
+| Azure DB India region pricing | WebSearch general | **KNOWLEDGE-BASELINE** (general only) |
+| SEBI cloud framework circular text | WebFetch verified | **PAPER-VERIFIED** (cited but not lawyer-interpreted) |
+| Aiven Startup-4 $75/mo AWS Mumbai | WebSearch G2 | **PAPER-VERIFIED** (third-party listing; not provisioning-tested) |
+| Crunchy Bridge Hobby $10/mo AWS Mumbai | WebSearch | **PAPER-VERIFIED** (similar caveat to Aiven) |
 
-### 5.3 What this means for "Phase 2.6"
+### 2.2 The 11ms latency claim — re-examined
 
-The original Phase 2.6 specification (Phase 2.5 runbook Section 6) defined:
-- Canary user staging
-- 6-stage rollout
-- Quantitative thresholds per stage
+v4 said: "DO BLR1 latency from Mumbai broadband: 11ms verified via Bash ping to `blr1.digitaloceanspaces.com (5.101.108.233)`".
 
-**At 0 paid users, this is theater**. There's nothing to gradually migrate. The actual technical work is:
-1. Bump kite-mcp-server's go.mod to add libSQL driver if not already there (already there per Phase 2.x work)
-2. Extend `AlertDBConfig.Driver` field to accept "turso" alongside "sqlite" and "postgres"
-3. Add `case "turso": ... alerts.OpenLibSQL(cfg.URL)` to the switch in `ProvideAlertDB`
-4. Set env vars on test deployment
-5. Verify boots cleanly + admin login works
+**v7 correction**: that ping was to **DO Spaces** in BLR1, not to a provisioned managed Postgres in BLR1. Spaces uses different network paths (object storage CDN-fronted) than Managed Databases (private VPC-routed). **The 11ms number is suggestive but not the actual managed-PG latency.**
 
-**This is ~4 hours of engineering, not a 12-16 week dispatch.** v5's "decide not to decide yet" softens to: **"the dispatch was always overkill at 0 users; the actual technical work is small"**.
+For Track 1 Turso, we DID measure actual DB latency:
+- Warm INSERT 54-86ms from same Mumbai broadband to `aws-ap-south-1.turso.io`
+- That's the only **REAL-EMPIRICAL** managed-DB-from-Mumbai latency we have.
 
----
+### 2.3 What this means for v6's recommendations
 
-## Section 6 — Counterfactual: What If Track 1 Had Failed?
+v6 said "Path 2 wins on Postgres future-proofing" — **partially based on PAPER-VERIFIED Path 2 reachability that Track 2 falsified**. v6's bimodal Path 6 vs Path 2 framing collapses when Path 2 turns out to be UI-blocked.
 
-### 6.1 What would have flipped the recommendation
-
-If Track 1 INSERT latency had been **>500ms warm-state**, Path 6 would be too slow for our access pattern. Would flip recommendation to Path 2 (DO BLR1) for testing.
-
-If Track 1 had shown **auto-suspend after 5min idle** (like Neon Free), Path 6 Free would be unsuitable for production canary; would force upgrade to Developer $4.99/mo OR flip to Path 2.
-
-If **Mumbai region had not been available** in Turso UI (contradicting v3 Context7 verification), recommendation would flip to Path 2 (DO BLR1) since v4 verified BLR1 latency at 11ms.
-
-If **Free tier had required payment-method-on-file** (contradicting v4 + Track 1), Path 6 wouldn't have been "frictionless"; would equal Path 2 in friction.
-
-### 6.2 Empirical confidence interval
-
-Track 1 measured 4 runs. Within that sample:
-- Cold start: 2.31s (n=1, first run)
-- Warm INSERT: 54-86ms (n=15 across 3 warm runs × 5 inserts each)
-- Warm SELECT: 33-39ms (n=3 across 3 warm runs)
-- Warm Ping: 0.5ms (n=2)
-
-This is **small sample**; for production confidence we'd want:
-- 100+ runs over 24+ hours
-- Multiple times of day (peak traffic vs off-peak)
-- Cross-validation from production Fly BOM machine, not just local WSL2
-
-**v6 honest take**: Track 1 sample is sufficient for "GO/NO-GO at canary scale". Insufficient for "proven at production scale". Track 3 (1-week sustained load) would close this gap.
-
-### 6.3 What v6 cannot answer with Track 1 alone
-
-- Sustained behavior over 1-week (Track 3 work)
-- Failure modes during AWS Mumbai network partition (operational simulation)
-- Behavior after auto-suspend reactivation (24h+ idle test)
-- Token rotation operational impact
-- Quota saturation behavior (we're 1500x under, but what happens at 100x under in 12 months?)
-
-**Path 6 recommendation has empirical canary-grade backing. Production-grade backing requires Track 3.**
+**v7 honest take**: **only Path 6 is REAL-EMPIRICAL for our account.** Everything else is paper.
 
 ---
 
-## Section 7 — Track 2 Skip-vs-Proceed Decision (Crisper)
+## Section 3 — Methodology Lesson
 
-### 7.1 The decision
+### 3.1 Why v4's "WebFetch verified" missed the new-account-tier restriction
 
-**SKIP Track 2 if** any of:
-- User accepts Path 6 Turso as the canary based on Track 1 evidence alone
-- User wants to minimize engineering investment
-- User defers Phase 2.6 entirely (Path 1)
+WebFetch reads marketing/docs pages — they describe the **product capability**, not the **per-account-state availability**. Documentation is correct in aggregate; UI behavior is account-specific.
 
-**PROCEED Track 2 if** any of:
-- User wants empirical Postgres baseline for Phase 3 multi-cell planning
-- User wants to compare Path 6 vs Path 2 with their own data, not paper analysis
-- User specifically wants AWS-pattern compliance posture pre-validated for NSE empanelment
+This is a structural limitation of paper-verification:
+- Docs: "Postgres available in BLR1"
+- UI: "your account, today, can or cannot create Postgres in BLR1"
 
-### 7.2 The recommendation
+**These can diverge** for reasons including: account age, payment history, tier, capacity, fraud signals, region rollout phase, engine-region pairings.
 
-**v6 recommends SKIP Track 2.**
+### 3.2 What v4 should have said
 
-Justification:
-1. Track 1 made Path 6 the empirical winner for canary
-2. Track 2's incremental information is low (mostly confirms what v4 docs already established)
-3. Track 2 friction (payment method entry, $4-5 cost, 30 min engineering) > information value
-4. Phase 3 multi-cell, if/when dispatched, can do its own empirical validation at that time
+Instead of "WebFetch verified — DO BLR1 supports managed Postgres", v4 should have said:
 
-**Counter-argument** (in user's favor): if user values "I tested both empirically" framing for personal/team confidence, Track 2 is cheap. ~$5 + 30 min = trivial cost. Worth doing if user wants the comparative data.
+> "**Documented**: DO BLR1 supports managed Postgres per official docs.
+> **Empirically reachable for our account**: NOT YET TESTED. Requires Track-style provisioning attempt to confirm."
 
-### 7.3 The middle path
+The two statements differ. v4 collapsed them.
 
-If user is still uncertain: **proceed Track 2 with reduced scope** — just signup + provision + basic SELECT 1 ping (no full hello-world, no Phase 2.4 round-trip migration). 10-15 minute total task. Resolves "does DO BLR1 work?" without committing to full Phase 2.6 baseline.
+### 3.3 Updated verification framework (v7)
 
----
+For future R-10-style decisions:
 
-## Section 8 — v6's Phase 2.6 Dispatch Readiness Checklist
+| Verification step | What it confirms | What it does NOT confirm |
+|---|---|---|
+| Read official docs | Product can do X | Whether YOUR account can do X today |
+| WebFetch pricing pages | Listed price $Y | Whether you'll be charged $Y (taxes, regional surcharges, account-specific discounts/penalties) |
+| Context7 release notes | Feature was launched | Whether it's currently rolled out to your tier/region |
+| Search user forums | Others have used it | Whether it works for your specific account-state |
+| **Provisioning attempt (Track-style)** | UI-truth: actually reachable for this account | Production behavior under load (Track 3 work) |
+| **Hello-world test** | Connection works + basic ops succeed | Sustained behavior over hours/days/weeks |
+| **1-week sustained load** | Production-grade reliability | Long-tail edge cases (multi-month) |
 
-If user authorizes Phase 2.6 NOW (post-Track-1):
+**Verification effort scales with stakes.** For zero-paid-user canary, Track-style attempt is the right level. For 100+ user production, sustained load + drill-tested rollback is needed.
 
-- [x] **Provider verified**: Path 6 Turso Free aws-ap-south-1 (Track 1 confirmed)
-- [x] **Connection string captured**: `libsql://phase-2-6-canary-sundeepg98.aws-ap-south-1.turso.io`
-- [x] **Token captured**: stored at `~/.path-e-tryout/turso-creds.env`
-- [ ] **kite-mcp-server integration**: extend `ProvideAlertDB` factory to accept `ALERT_DB_DRIVER=turso` (~4 hours engineering, TDD per CLAUDE.md)
-- [ ] **First deploy on test/dev account**: env vars set; smoke test passes
-- [ ] **Track 3 (optional)**: 1-week sustained load
-- [ ] **Decision when to flip primary**: at user's discretion; rollback is <5 minutes
+### 3.4 Implications for future R-10 / Phase 2.6 dispatches
 
-**Without paid users, R-10.3-4-5 are N/A**. The dispatch reduces to engineering integration + smoke test.
-
----
-
-## Section 9 — v6 Self-Criticism
-
-### What v6 might have wrong
-
-1. **Latency comparison**: I compared Turso warm latency to "current SQLite local on Fly volume". Without Phase 2.4 round-trip test running both side-by-side, this is theoretically-grounded but not measured-on-same-day. Could be off by 2-3x in either direction.
-
-2. **"Per-call latency" framing**: I argued the 50-150x latency multiplier "isn't user-visible" because per-call is still <100ms. This is correct for our access pattern but assumes our usage profile holds; if pattern changes (e.g., bulk import) the calculation flips.
-
-3. **Track 1 sample is small**: 4 runs over ~5 minutes. I'm extrapolating. If 24+ hours of data showed worse-or-better behavior, recommendation could shift.
-
-4. **The "skip Phase 2.6 ceremony" argument** is ONLY valid at 0 paid users. As soon as we have any paid users, the staging matters. v6's framing is correct for the current moment but doesn't scale forward; future v7 (when paid users arrive) needs to re-engage Phase 2.6 ceremony.
-
-5. **I didn't test from production Fly BOM machine**: latency from `Mumbai broadband WSL2 → Turso aws-ap-south-1` (Track 1 actual) might differ from `Fly BOM machine → Turso aws-ap-south-1` (production reality). Could be similar; could be different. Track 1 is local-machine, not production.
-
-### What v6 doesn't yet know
-
-- Is it actually a good idea to have 3 driver options (sqlite, postgres, turso/libsql) in the production ProvideAlertDB factory? Or does adding a 3rd driver complicate the code without benefit? Possibly should drop sqlite once turso adopted; possibly should keep all three for testing/dev/prod variety.
-- Will libSQL ecosystem mature enough that Turso vendor-risk decreases? At 16.7k stars (v5 verified) it's on a good trajectory but not bullet-proof.
-- Does the 5-minute rollback claim (revert env var) actually work? Phase 2.5 runbook designed it; not yet drilled in production.
+When user reaches 50+ paid subs trigger and re-engages Phase 2.6:
+- Don't trust docs alone. Test provisioning each candidate first.
+- Prioritize providers with self-serve UI > sales-only providers (Yotta is now demoted)
+- Latency claims from secondary endpoints (Spaces, marketing CDNs) are NOT proxies for managed-DB latency
+- Do parallel provisioning trials for top-2 candidates BEFORE committing engineering time
 
 ---
 
-## Section 10 — Recommended Next Action (v6)
+## Section 4 — Path Hierarchy Reset (Post-Falsification)
 
-### Option A — Skip Track 2; adopt Path 6 now
+### 4.1 v7 tier system
 
-**Steps**:
-1. (Engineering, ~4h): extend `app/providers/alertdb.go` with `case "turso"` arm calling `alerts.OpenLibSQL(cfg.URL)` (which doesn't exist yet — would need libSQL driver wrapper in alerts external repo)
-2. (Test): TDD per CLAUDE.md — write test that `Driver="turso" + valid URL` returns non-nil DB; runs against `~/.path-e-tryout/turso-creds.env`
-3. (Deploy): set `ALERT_DB_DRIVER=turso` and `ALERT_DB_URL=...` on a Fly machine for test/dev environment
-4. (Verify): smoke-test passes; admin login + record_audit work end-to-end
-5. (Document): update Phase 2.5 runbook with Turso-specific operational notes
+**Tier 1 — REAL-EMPIRICAL (provisioning-validated)**:
+- Path 6 (Turso ap-south-1 Free) — Track 1 success
+- Path 1 (SQLite + Litestream → R2 — current production)
 
-**Cost**: ~4-6h engineering. ~$0 ongoing. Reversible <5 min.
+**Tier 2 — PAPER-VERIFIED (docs say it works; not Track-tested)**:
+- Path 5 (Self-host Postgres on Fly Volume BOM) — Fly volumes work; Postgres install + WAL-E backup is engineering work, not paper-questionable
+- Path 11 (Litestream alternatives — Tigris / Backblaze / S3 / MinIO) — backup-target swap; trivially testable
 
-**Outcome**: kite-mcp-server now has 3-way driver factory (sqlite/postgres/turso) all empirically validated. Phase 2.6 essentially closed.
+**Tier 3 — FALSIFIED for our account-state**:
+- Path 2 (DO BLR1 PostgreSQL) — Track 2 UI didn't surface BLR1
 
-### Option B — Proceed Track 2 reduced scope
+**Tier 4 — NOT-TESTABLE-WITHOUT-USER-ACTION**:
+- Path 3 (AWS RDS Mumbai) — needs AWS account creation, IAM setup; high friction
+- Path 7 (Yotta SutraDB) — sales-only signup; needs phone call
+- Path 4 (Supabase Mumbai) — could be Track-tested but never was; same risk as Path 2 of paper-vs-UI gap
 
-**Steps**:
-1. (Browser, ~10 min): DO signup → halt for payment-method → user enters card → provision db-s-1vcpu-1gb in BLR1
-2. (Test, ~5 min): Go program same pattern as Track 1 but `database/sql.Open("pgx", url)`; measure cold start + 4 warm runs
-3. (Decide): based on comparative data, pick Path 6 or Path 2 (or stay Path 1)
+**Tier 5 — Eliminated in earlier rounds**:
+- Path 8 (Crunchy Bridge), Path 9 (rqlite), Path 10 (Cloudflare D1), Path 12 (DuckDB)
 
-**Cost**: ~$4-5 trial + 30 min engineering. Information value: comparative data for Phase 3 planning.
+### 4.2 The binary that remains
 
-### Option C — Stay Path 1; revisit at trigger
+After tier-pruning:
+- **Action**: Path 6 (adopt Turso Free) — Track 1 validated
+- **Status quo**: Path 1 (defer; stay on SQLite) — production at v266
 
-**Steps**: nothing.
+These are the only two paths with REAL-EMPIRICAL grounding for our zero-paid-user state.
 
-**Cost**: $0. Outcome: Phase 2.x infrastructure already shipped at v262 + Track 1-confirmed Path 6 ready when needed.
+### 4.3 What about Path 5 (Self-host)?
+
+Self-host on Fly Volume BOM is paper-defensible (we already use Fly volumes for SQLite production; running Postgres-on-volume is similar mechanics). But it adds ops burden (~1.5-2 hrs/mo per v6) for zero immediate user-visible benefit.
+
+**v7 keeps Path 5 as a fallback option** in case user wants Postgres-protocol-future without managed-service vendor dependency. But it's not the primary recommendation.
 
 ---
 
-## Section 11 — Cross-Round Convergence (v1→v6)
+## Section 5 — Recommendation: BINARY
 
-### v1→v6 stable conclusions (highest confidence after 6 rounds)
+### 5.1 Path 6 (Turso Free) — adopt now
 
-1. Mumbai region preferred for India users
+**Why this is the recommendation**:
+1. Track 1 empirically validated at Mumbai region
+2. Free tier covers 1500x our usage with no payment-method-on-file required
+3. Engineering work ~4-6h to wire libSQL driver into `app/providers/alertdb.go` factory (extending Phase 2.3 driver-switching work)
+4. Reversible to Path 1 in <5 min via `ALERT_DB_DRIVER` env var revert
+5. PITR 1-day on Free; 10/30/90-day on paid tiers (Track 1 confirmed PITR built into Free tier UI)
+6. Mumbai region collocated; warm latency 35-86ms (acceptable for our access pattern per v6 analysis)
+
+**Engineering steps** (TDD per `.claude/CLAUDE.md`):
+1. Write `providers_test.go` test that `Driver="turso" + valid URL` returns non-nil DB
+2. Run test → confirm RED (Driver enum doesn't have "turso")
+3. Add `case "turso": return alerts.OpenLibSQL(cfg.URL, cfg.Token)` to `ProvideAlertDB` factory
+4. Add `OpenLibSQL` constructor to external `algo2go/kite-mcp-alerts` repo (similar pattern to `OpenPostgresDB`)
+5. Tag alerts repo v0.6.0; bump kite-mcp-server's go.mod
+6. Test on test/dev Fly machine first; flip when comfortable
+7. Document in Phase 2.5 runbook
+
+**Expected total effort**: 4-6 hours engineering + 1-2 days observation before flipping primary backend.
+
+### 5.2 Path 1 (Defer SQLite) — defensible alternative
+
+**Why this might be right**:
+1. 0 paid users → 0 user-visible benefit from Path 6 adoption today
+2. SQLite + Litestream → R2 already battle-tested across v189-v266 production
+3. Phase 2.x infrastructure already shipped at v262 (driver-switching factory + Phase 2.4 round-trip tests) — defensive optionality preserved
+4. Engineering effort = 0; mental overhead = 0
+
+**Cost of staying Path 1**: at trigger event (50+ paid subs OR Phase 3 dispatch), we re-engage Phase 2.6 dispatch, repeat verification (DO BLR1 might be available by then, or might not), eat ~10-week ramp-up.
+
+### 5.3 The choice between the two
+
+This is genuinely an **incremental optionality investment** decision:
+- Path 6 adoption = small upfront cost, accumulated optionality (multi-region read replicas, managed PITR)
+- Path 1 stay = zero cost, no new optionality, fallback to SQLite-everything-forever
+
+**Both are defensible.** v7's recommendation: **default to Path 6** because the 4-6h engineering cost is small relative to the optionality gained, AND Track 1's empirical success has already eliminated most of the risk. But if user wants minimal-moving-parts posture, Path 1 is fine.
+
+---
+
+## Section 6 — What If User Wants to Validate Path 3 (AWS RDS Mumbai) Anyway?
+
+If user, despite v7's recommendation, wants to test Path 3 to be thorough:
+
+**Effort**:
+- AWS account creation (~30-60 min including KYC for Indian customers)
+- IAM setup (~15-30 min)
+- RDS provisioning in `ap-south-1` (~20-30 min — RDS is slow to provision)
+- Hello-world test (~15 min)
+- Total: ~2-3 hours, plus ~$5-10 prorated trial cost
+- **Risk**: same paper-vs-UI gap could surface (e.g., new AWS accounts have stricter region/instance limits)
+
+**v7 says**: probably not worth the investment given Track 1 success. But if user does this and Path 3 works, the recommendation flips to **either Path 3 OR Path 6** (Postgres-protocol-with-AWS-Mumbai vs libSQL-with-Turso-Mumbai) — and the v6-style bimodal framing returns.
+
+---
+
+## Section 7 — What If User Wants to Investigate Path 2 (DO BLR1) Mystery?
+
+DO BLR1 falsification is a research question, not a blocker for the canary decision. If user wants to resolve:
+
+**Options**:
+1. **Wait 24-48h and retry**: capacity / fraud-rolling-trust restrictions may clear automatically
+2. **Add ~$10 of credit to DO account, leave 1 week, retry**: payment-history threshold theory test
+3. **Contact DO support**: ask "why doesn't BLR1 show in my managed PG region picker?" — direct answer
+4. **Switch to MongoDB engine, see if BLR1 shows**: if MongoDB lists BLR1 but PostgreSQL doesn't, it's engine-specific
+
+**v7 doesn't recommend pursuing this** unless user specifically wants Path 2 as the canary backend. If Path 6 works, the DO mystery is interesting but not decision-relevant.
+
+---
+
+## Section 8 — Cross-Round Convergence (v1 → v7)
+
+### Conclusions stable across all 7 rounds (highest confidence)
+
+1. Mumbai region preferred for India users (DPDP-grounded)
 2. Saturday 06:00 IST cutover window (if Phase 2.6 staged rollout fires)
-3. 12-16 week canary calendar (if Phase 2.6 staged rollout fires; v6 added "if")
-4. Auto-rollback watchdog as force multiplier
-5. R-10.1 (provider) is the only HIGH-cost-of-wrong decision
-6. At canary scale, all R-10 decisions reversible cheaply
-7. **Path 6 (Turso) viable for our access pattern** — v4-v5 paper-projected, v6 empirically confirmed
+3. R-10.1 (provider) is the only HIGH-cost-of-wrong decision
+4. At canary scale, all R-10 decisions reversible cheaply
+5. Phase 2.x driver factory at v262 was the right defensive investment
 
-### v6 corrections to v5
+### Conclusions that EVOLVED across rounds
 
-- v5: "Don't decide yet" → v6: "Path 6 adoption is now low-friction; do it as 4-6h engineering, not 12-week dispatch"
-- v5: "Track 1 not yet run; Path 6 vs Path 2 bimodal" → v6: "Track 1 succeeded; Path 6 is empirical winner for canary"
-- v5: "12-16 week canary calendar gated on user authorization" → v6: "ceremony unnecessary at 0 paid users; technical work is ~4h"
+| Round | Top recommendation |
+|---|---|
+| v1 | DO BLR1 / Self-host Fly bimodal |
+| v2 | Self-host elevated; DO BLR1 secondary |
+| v3 | Adversarial — DO BLR1 primary; Self-host with caveats |
+| v4 | Web-verified DO BLR1 + Yotta surfaced |
+| v5 | "Don't decide yet" — Path 1 defer or Path E try-before-buy |
+| v6 | Track 1 success → Path 6 Turso primary; Path 2 DO BLR1 secondary |
+| **v7** | **Path 2 falsified → BINARY: Path 6 OR Path 1** |
 
-### v6 → v7 expected changes
+The arc reflects increasing empirical grounding. v6 was bimodal because both Path 6 (Turso) and Path 2 (DO BLR1) seemed reachable. v7 is binary because only Path 6 is actually reachable.
 
-When user count ≥ 5 paid:
-- Reintroduce Phase 2.6 ceremony for production user migration
-- Track 3 sustained-load data needed
-- R-10.3-4-5-6 become real (not N/A)
+### Lessons across the arc
 
-When user count ≥ 50 paid:
-- NSE empanelment pre-flight
-- Phase 3 multi-cell planning
-- Possibly migrate Path 6 → Path 2 if Postgres-specific benefits emerge
-
----
-
-## Section 12 — Sources (v6)
-
-### Track 1 empirical (this round)
-- Browser screenshots: `D:\Sundeep\projects\kite-mcp-server\.playwright-mcp\path-e-track1-turso-signup.png`
-- Credentials: `~/.path-e-tryout/turso-creds.env` (outside repo)
-- Test program: `/tmp/path-e-turso-test/main.go` (scratch; outside repo)
-- Track 1 results doc: `.research/path-e-try-before-buy-results.md` at HEAD `31e2638`
-
-### v1-v5 sources (carried forward)
-All from v5's Section 12 unchanged. See `D:\Sundeep\projects\kite-mcp-server\.research\phase-2-6-r10-decisions.md` git history at commit `19357d6` for the complete source list.
+1. **Paper-truth ≠ UI-truth**. v4's "Context7 verified" was technically correct (the docs DO list BLR1) but operationally misleading (UI didn't surface BLR1).
+2. **More research rounds added options**, but did NOT change the core recommendation until empirical attempt forced it.
+3. **The actual Track 1 + Track 2 attempt revealed more in 1 day than 6 rounds of paper analysis.** Future similar decisions should compress to 1-2 paper rounds + immediate provisioning trial.
 
 ---
 
-**End of v6 R-10 empirical synthesis. Doc-only commit; supersedes v5. tools=130 invariant preserved. NO source mutations.**
+## Section 9 — Phase 2.6 Closure Recommendation
 
-**v6's primary recommendation**: **adopt Path 6 (Turso Free aws-ap-south-1) as canary in ~4-6h engineering window**. Phase 2.6 ceremony unnecessary at 0 paid users; reintroduce when paid users arrive. Track 2 (DO BLR1) skip recommended — information value low post-Track-1.
+Phase 2.6 was originally framed as a 12-16 week canary dispatch with 6 stages (R-10.1 through R-10.6). v6 already noted this ceremony was overkill at 0 paid users.
+
+**v7 closes Phase 2.6 with this resolution**:
+
+If user picks Path 6: Phase 2.6 dispatch reduces to ~4-6h engineering integration + smoke test + flip-when-ready. **Not 12-16 weeks**. Not 6 stages. Just integration of an empirically-validated driver into the factory we already shipped at v262.
+
+If user picks Path 1: Phase 2.6 stays GATED but the gate is now well-understood. Re-engage when trigger fires; provisioning trials happen at that time with then-current data.
+
+**Phase 2.6 is no longer "decide between 8 paths". It's "do this small engineering task OR don't, your call".**
+
+---
+
+## Section 10 — Self-Criticism (v7)
+
+### What v7 might still be wrong about
+
+1. **"Path 2 falsified" might be temporary**. Track 2 was on day 1 of the new DO account. 24-48h trust-rolling could surface BLR1. Without retry, can't distinguish "permanent" from "temporary" account-tier restriction. **v7 treats the falsification as decision-relevant signal regardless** because it shifted the friction-balance toward Path 6.
+
+2. **Track 1's 4 runs is small sample**. Production-grade confidence needs Track 3 (1-week sustained). Path 6 recommendation is canary-grade, not production-grade.
+
+3. **The "11ms ping" misframing affects Path 5 too**. If we self-host Postgres on Fly Volume BOM, our latency to it is sub-ms (same Fly machine). But if we considered self-host on a different cloud, the same paper-vs-UI gap could apply.
+
+4. **v7 didn't actually verify Path 6 paid-tier claims** (Developer $4.99, Scaler $24.92, Pro $416.58). Track 1 only validated Free tier. If user grows past Free quotas (very unlikely at 0 paid users), upgrade behavior + cost could differ from paper.
+
+5. **The methodology framework in Section 3.3 is normative, not yet validated**. v7 introduces a verification-tier system but hasn't tested whether it would have prevented v4's mistake in retrospect. Future R-10-style dispatches should validate the framework.
+
+### What v7 explicitly cannot answer
+
+- Does DO BLR1 work for established accounts (>30 days, positive payment history)? Possibly — but verifying takes account-aging.
+- Does AWS RDS Mumbai work for our account? Untested; could have its own paper-vs-UI gap.
+- Will Turso Free auto-suspend after 24h+ idle? Track 1 didn't test (Track 3 work).
+- Will libSQL ecosystem maturity hold for 12+ months? Speculative.
+
+---
+
+## Section 11 — Recommended Next Action (v7)
+
+### Default v7 path
+
+**Adopt Path 6 (Turso Free aws-ap-south-1) via 4-6h engineering**:
+
+1. Phase 2.6.1 (engineering): extend `app/providers/alertdb.go` driver-switching to support `Driver="turso"`. TDD per CLAUDE.md.
+2. Phase 2.6.2 (external repo): add `OpenLibSQL(url, token) (*DB, error)` constructor to `algo2go/kite-mcp-alerts`. Tag v0.6.0.
+3. Phase 2.6.3 (config): set `ALERT_DB_DRIVER=turso`, `ALERT_DB_URL=libsql://phase-2-6-canary-sundeepg98.aws-ap-south-1.turso.io`, `ALERT_DB_TOKEN=<from ~/.path-e-tryout/turso-creds.env>` on test/dev Fly machine.
+4. Phase 2.6.4 (smoke test): admin login + record_audit work end-to-end through Turso backend.
+5. Phase 2.6.5 (defer flip on production): keep `ALERT_DB_DRIVER=sqlite` on production until comfortable.
+6. Phase 2.6.6 (closure): mark Phase 2.6 done; Phase 2.7 (production canary) GATED on first-paid-user trigger.
+
+### Alternative if user prefers minimal-action
+
+**Stay Path 1**: do nothing. v262 production continues on SQLite + Litestream. Phase 2.x infrastructure stays as defensive optionality.
+
+### What v7 does NOT recommend
+
+- Investigating DO BLR1 mystery (low ROI; Track 1 success already provides path forward)
+- Setting up AWS account for Path 3 trial (high friction; unclear if worth the effort given Track 1)
+- Sales call to Yotta (only relevant if SEBI-direct-RE-registration path becomes likely; not at 0 paid users)
+- Track 3 (1-week sustained load) yet — wait until Path 6 actually integrated and running on test/dev
+
+---
+
+## Section 12 — Sources (v7 New)
+
+### WebFetch verified (v7-specific, May 2026)
+- [DO PostgreSQL availability docs](https://docs.digitalocean.com/products/databases/postgresql/details/availability/) — last edited 23 Apr 2026; lists BLR1 for managed PG
+- [DO regional availability matrix](https://docs.digitalocean.com/platform/regional-availability/) — confirms PG in BLR1 with no documented account-tier restriction
+- [DO managed PostgreSQL marketing page](https://www.digitalocean.com/products/managed-databases-postgresql) — no specific regions enumerated
+- [DigitalOcean status](https://status.digitalocean.com/) — BLR1 operational as of 9 May 2026
+
+### Empirical (Track 1 + Track 2)
+- Track 1 results: `.research/path-e-try-before-buy-results.md` at HEAD `31e2638`
+- Track 2 falsification: this commit (no separate doc; surfaced in v7 directly)
+- Track 2 screenshot: `D:\Sundeep\projects\kite-mcp-server\.playwright-mcp\path-e-track2-do-region-picker-no-blr1.png`
+
+### Context7 (re-queried v7)
+- DO release notes archive (4 September) — explicitly mentions MySQL+Redis in BLR1; v4 extrapolated to PG without separate confirmation
+
+### Carried forward from v1-v6
+All sources from v6's Section 12 unchanged — except DO BLR1 reachability claim is now FALSIFIED.
+
+---
+
+**End of v7 R-10 falsification reckoning. Doc-only commit; supersedes v6. tools=130 invariant preserved. NO source mutations.**
+
+**v7's primary recommendation**: **adopt Path 6 (Turso Free aws-ap-south-1) via 4-6h engineering integration** OR stay Path 1 (defer SQLite). The 8-path hierarchy has collapsed to a binary; the binary has clear default.
+
+**v7's methodology lesson**: WebFetch + Context7 verification is paper-truth. Track-style provisioning attempt is UI-truth. The two can diverge undocumentedly. For future R-10-style decisions, compress paper analysis (~1-2 rounds) and prioritize provisioning trials early.
