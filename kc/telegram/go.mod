@@ -82,7 +82,6 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
-	github.com/algo2go/kite-mcp-instruments => ../instruments
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../ticker

@@ -70,7 +70,6 @@ use (
 	./kc/audit
 	./kc/cqrs
 	./kc/eventsourcing
-	./kc/instruments
 	./kc/papertrading
 	./kc/registry
 	./kc/riskguard

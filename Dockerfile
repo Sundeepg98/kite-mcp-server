@@ -21,7 +21,6 @@ COPY kc/riskguard/go.mod kc/riskguard/go.sum* kc/riskguard/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
 COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
 COPY kc/eventsourcing/go.mod kc/eventsourcing/go.sum* kc/eventsourcing/
-COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
 COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY kc/ticker/go.mod kc/ticker/go.sum* kc/ticker/
 COPY kc/usecases/go.mod kc/usecases/go.sum* kc/usecases/

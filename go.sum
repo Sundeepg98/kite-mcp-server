@@ -12,6 +12,8 @@ github.com/algo2go/kite-mcp-domain v0.1.0 h1:tLQ+7WxFolMxo4dtW3BN45WFnYvbTqsMF67
 github.com/algo2go/kite-mcp-domain v0.1.0/go.mod h1:XsbcFNchYrahzSSN7oww+5XtSBAIavS5YmeFN8M7178=
 github.com/algo2go/kite-mcp-i18n v0.1.0 h1:37KY+MTmQKo+NIxlJcp4AYL2dmF7rZxayCJgBG0xp9M=
 github.com/algo2go/kite-mcp-i18n v0.1.0/go.mod h1:XpdXAnBcVWUWxv/GtLCauzwZPoGytLcGPRZTTo8h/DE=
+github.com/algo2go/kite-mcp-instruments v0.1.0 h1:TtJOJOFHEwRAmX7YSdhQVatqK2xLaCLDNAuGfH6kf0k=
+github.com/algo2go/kite-mcp-instruments v0.1.0/go.mod h1:3BPb/ieWrz1WvNTUulp45jj050l9xrshiLRoFwQXQ7E=
 github.com/algo2go/kite-mcp-isttz v0.1.0 h1:9E3T/LVk0J9XCHp80keS9PPL4k+vl/9FVvMB3UviBlY=
 github.com/algo2go/kite-mcp-isttz v0.1.0/go.mod h1:Hc4IJoSF9Ib6U930IIz8nk2iT1FLt17tgpdREv8+MgM=
 github.com/algo2go/kite-mcp-legaldocs v0.1.0 h1:9fw+JkpEW050KMFWj/JKCANZL9UTgY0KORoNfw3uGkc=
