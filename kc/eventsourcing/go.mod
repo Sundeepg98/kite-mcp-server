@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/eventsourcing
+module github.com/algo2go/kite-mcp-eventsourcing
 
 go 1.25.0
 

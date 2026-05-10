@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/algo2go/kite-mcp-eventsourcing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

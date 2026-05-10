@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/algo2go/kite-mcp-eventsourcing"
 )
 
 func TestIsBrokerUnavailable(t *testing.T) {

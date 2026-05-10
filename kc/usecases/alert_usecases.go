@@ -9,7 +9,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/algo2go/kite-mcp-eventsourcing"
 	logport "github.com/algo2go/kite-mcp-logger"
 )
 

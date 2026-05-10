@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/algo2go/kite-mcp-broker"
-	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/algo2go/kite-mcp-eventsourcing"
 )
 
 // orderAggregateToBrokerOrder flattens an event-sourced OrderAggregate into

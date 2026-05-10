@@ -2,7 +2,7 @@ package kc
 
 import (
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/algo2go/kite-mcp-eventsourcing"
 )
 
 // EventingService groups the domain event dispatcher and append-only event
