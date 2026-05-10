@@ -25,7 +25,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/algo2go/kite-mcp-scheduler"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )

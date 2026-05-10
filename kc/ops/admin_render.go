@@ -6,7 +6,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops/admin"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 )
 
 // admin_render.go — Anchor 3 PR 3.2 (per .research/anchor-1-and-3-

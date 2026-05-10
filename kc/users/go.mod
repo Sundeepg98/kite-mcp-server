@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/users
+module github.com/algo2go/kite-mcp-users
 
 go 1.25.0
 

@@ -13,7 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 )
 
 // TestExchangeRequestToken_WithUserStore_Success tests the full success path

@@ -16,7 +16,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 )
 
 // ===========================================================================

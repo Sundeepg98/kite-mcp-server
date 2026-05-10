@@ -24,7 +24,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 )
 
 // FamilyUserStore is the narrow interface FamilyService needs from user store.

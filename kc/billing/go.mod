@@ -56,7 +56,7 @@ require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
 	github.com/algo2go/kite-mcp-isttz v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-templates v0.1.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-users v0.1.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/mod v0.32.0 // indirect
@@ -80,7 +80,7 @@ require (
 // decomposition arc.
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/users => ../users
+	github.com/algo2go/kite-mcp-users => ../users
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

@@ -20,7 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/plugins/rolegate"

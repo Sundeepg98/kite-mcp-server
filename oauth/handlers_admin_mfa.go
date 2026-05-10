@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 )
 
 // --- Admin MFA (TOTP) — enrollment + verification + cookie middleware ---

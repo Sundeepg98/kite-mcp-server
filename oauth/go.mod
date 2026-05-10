@@ -41,7 +41,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
 	github.com/algo2go/kite-mcp-templates v0.1.0
-	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-users v0.1.0
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/oauth2 v0.36.0
 	modernc.org/sqlite v1.46.1 // indirect
@@ -77,6 +77,6 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../
-	github.com/zerodha/kite-mcp-server/kc/users => ../kc/users
+	github.com/algo2go/kite-mcp-users => ../kc/users
 	github.com/zerodha/kite-mcp-server/testutil => ../testutil
 )

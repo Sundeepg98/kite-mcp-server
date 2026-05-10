@@ -9,7 +9,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 )
 
 // family.go — Wave D Phase 2 Slice β-2. Extracts the family-invitation

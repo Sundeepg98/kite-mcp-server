@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )

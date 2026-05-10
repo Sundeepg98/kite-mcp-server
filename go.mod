@@ -36,7 +36,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-users v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/watchlist v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/plugins v0.0.0-00010101000000-000000000000
@@ -96,7 +96,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/ticker => ./kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ./kc/usecases
-	github.com/zerodha/kite-mcp-server/kc/users => ./kc/users
+	github.com/algo2go/kite-mcp-users => ./kc/users
 	github.com/zerodha/kite-mcp-server/kc/watchlist => ./kc/watchlist
 	github.com/zerodha/kite-mcp-server/oauth => ./oauth
 	github.com/zerodha/kite-mcp-server/plugins => ./plugins

@@ -14,7 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/algo2go/kite-mcp-users"
 	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	appmetrics "github.com/zerodha/kite-mcp-server/app/metrics"
