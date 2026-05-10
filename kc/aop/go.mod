@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/aop
+module github.com/algo2go/kite-mcp-aop
 
 go 1.25.0
 
