@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // AdminCheck validates that the caller is an authenticated admin.

@@ -3,7 +3,7 @@ package ops
 import (
 	"net/http"
 
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // overview returns the combined overview JSON.

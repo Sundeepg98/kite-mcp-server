@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 	"golang.org/x/time/rate"
 )
 

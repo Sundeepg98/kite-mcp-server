@@ -14,7 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	mcpalerts "github.com/zerodha/kite-mcp-server/mcp/alerts"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
 

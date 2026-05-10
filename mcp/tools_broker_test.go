@@ -31,7 +31,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // ── mock broker.Factory that creates Zerodha clients backed by httptest ──────

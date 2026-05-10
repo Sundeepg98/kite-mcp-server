@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 func newTestStoreWithDB(t *testing.T) (*Store, *alerts.DB) {

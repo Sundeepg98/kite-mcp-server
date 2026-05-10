@@ -21,7 +21,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // briefingTokenAdapter bridges a token store to alerts.TokenChecker.

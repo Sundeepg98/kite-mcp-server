@@ -52,7 +52,7 @@ require (
 
 require (
 	github.com/mark3labs/mcp-go v0.46.0
-	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-oauth v0.1.0
 	go.uber.org/goleak v1.3.0
 )
 
@@ -103,6 +103,6 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
-	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
+	github.com/algo2go/kite-mcp-oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

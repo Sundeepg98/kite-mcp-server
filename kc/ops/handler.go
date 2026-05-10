@@ -16,7 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/algo2go/kite-mcp-templates"
 	"github.com/algo2go/kite-mcp-users"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // Handler serves the ops dashboard pages and API endpoints.

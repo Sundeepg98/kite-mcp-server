@@ -33,7 +33,7 @@ require (
 	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
-	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-oauth v0.1.0
 )
 
 require (
@@ -80,6 +80,6 @@ require (
 // decomposition arc.
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
+	github.com/algo2go/kite-mcp-oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

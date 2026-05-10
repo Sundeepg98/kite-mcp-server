@@ -10,7 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // PaperTradingToggleTool enables or disables paper trading mode.

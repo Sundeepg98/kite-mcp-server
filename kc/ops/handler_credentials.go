@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // credentials handles GET (list own), POST (create own), DELETE (remove own) for per-user Kite credentials.

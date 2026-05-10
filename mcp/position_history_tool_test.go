@@ -16,7 +16,7 @@ import (
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
 

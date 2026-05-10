@@ -8,7 +8,7 @@ import (
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc/sectors"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // --- Portfolio types ---

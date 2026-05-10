@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // Middleware returns mcp-go ToolHandlerMiddleware that logs every tool call.

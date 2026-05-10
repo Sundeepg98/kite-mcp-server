@@ -14,7 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // IsAlphanumeric returns true if s is non-empty and contains only ASCII letters and digits.

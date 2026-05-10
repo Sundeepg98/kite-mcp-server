@@ -8,7 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-templates"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // Page data types and shared helpers for the user dashboard SSR pages.

@@ -14,7 +14,7 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/algo2go/kite-mcp-alerts"
 	logport "github.com/algo2go/kite-mcp-logger"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // openTestStoreWithKey creates an in-memory store with encryption and chain seeded.

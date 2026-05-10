@@ -10,7 +10,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // PayoffHandler renders option-strategy payoff curves on the user

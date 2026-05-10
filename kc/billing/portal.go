@@ -6,7 +6,7 @@ import (
 
 	stripe "github.com/stripe/stripe-go/v82"
 	billingportal "github.com/stripe/stripe-go/v82/billingportal/session"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // PortalHandler redirects the user to their Stripe Customer Portal where they

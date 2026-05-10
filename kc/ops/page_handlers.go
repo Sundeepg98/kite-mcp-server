@@ -7,7 +7,7 @@ import (
 	htmltemplate "html/template"
 
 	"github.com/zerodha/kite-mcp-server/kc/billing"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 func (d *DashboardHandler) serveBillingPage(w http.ResponseWriter, r *http.Request) {

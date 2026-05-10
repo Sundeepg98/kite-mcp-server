@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // metricsAPI returns global audit trail metrics for the ops dashboard.

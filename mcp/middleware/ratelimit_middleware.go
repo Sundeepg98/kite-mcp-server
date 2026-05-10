@@ -8,7 +8,7 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // TierMultiplierFunc resolves a per-user throttling multiplier from their

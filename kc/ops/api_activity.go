@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // ActivityHandler serves activity-timeline JSON, CSV export, and the SSE stream.

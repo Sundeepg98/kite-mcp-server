@@ -17,7 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // newTestDashboardWithAudit is defined in coverage_final_test.go — reuse it here.

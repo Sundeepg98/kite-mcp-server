@@ -11,7 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // --- Status types ---

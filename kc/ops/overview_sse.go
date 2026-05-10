@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // overviewStream sends Server-Sent Events with pre-rendered HTML fragments

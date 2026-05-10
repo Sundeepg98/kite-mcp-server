@@ -24,7 +24,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-users"
 	"github.com/zerodha/kite-mcp-server/mcp"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // writeToolPrefixes is the set of tool-name prefixes that mutate state or

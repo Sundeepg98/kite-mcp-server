@@ -7,7 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/sectors"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // scannerHandler is the per-user dashboard endpoint that returns a filtered

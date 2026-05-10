@@ -8,7 +8,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/algo2go/kite-mcp-i18n"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // rejectionMessage builds the user-facing rejection text using kc/i18n

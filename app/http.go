@@ -29,7 +29,7 @@ import (
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/algo2go/kite-mcp-templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 	"golang.org/x/crypto/bcrypt"
 )
 

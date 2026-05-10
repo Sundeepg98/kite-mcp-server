@@ -6,7 +6,7 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // Middleware returns an MCP tool handler middleware that enforces billing tier

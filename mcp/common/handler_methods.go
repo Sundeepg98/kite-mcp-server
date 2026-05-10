@@ -12,7 +12,7 @@ import (
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/algo2go/kite-mcp-users"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // Context key for session type

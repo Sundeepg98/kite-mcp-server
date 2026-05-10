@@ -9,7 +9,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // --- Orders P&L types ---

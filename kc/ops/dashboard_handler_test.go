@@ -18,7 +18,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // newTestDashboard creates a DashboardHandler backed by a real kc.Manager in dev mode.

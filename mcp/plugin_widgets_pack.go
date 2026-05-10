@@ -7,7 +7,7 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // builtinWidgetDataFunc is the contract for a widget data function in

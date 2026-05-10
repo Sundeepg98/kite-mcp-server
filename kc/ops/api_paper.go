@@ -3,7 +3,7 @@ package ops
 import (
 	"net/http"
 
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // paperStatus returns the paper trading account status for the authenticated user.

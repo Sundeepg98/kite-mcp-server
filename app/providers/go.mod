@@ -94,7 +94,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/watchlist v0.0.0-00010101000000-000000000000 // indirect
-	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-oauth v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000 // indirect
 	go.uber.org/dig v1.19.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
@@ -128,6 +128,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../../kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ../../kc/usecases
 	github.com/zerodha/kite-mcp-server/kc/watchlist => ../../kc/watchlist
-	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
+	github.com/algo2go/kite-mcp-oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

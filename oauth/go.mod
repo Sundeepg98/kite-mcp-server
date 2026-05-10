@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/oauth
+module github.com/algo2go/kite-mcp-oauth
 
 go 1.25.0
 

@@ -16,7 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // instrumentResolverAdapter adapts instruments.Manager to satisfy usecases.InstrumentResolver.

@@ -8,7 +8,7 @@ import (
 
 	stripe "github.com/stripe/stripe-go/v82"
 	checkoutsession "github.com/stripe/stripe-go/v82/checkout/session"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // maxUsersByPlan maps plan names to the subscription's max_users metadata

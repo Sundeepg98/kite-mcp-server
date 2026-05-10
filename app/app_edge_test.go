@@ -25,7 +25,7 @@ import (
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/algo2go/kite-mcp-users"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // p100Manager calls newTestManagerWithDB (from helpers_test.go).

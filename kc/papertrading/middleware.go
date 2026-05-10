@@ -8,7 +8,7 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // writeTools are tools that mutate state and should be intercepted in paper mode.

@@ -10,7 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // devNull implements io.Writer and discards all bytes. It is used by factories

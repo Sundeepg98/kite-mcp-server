@@ -23,7 +23,7 @@ import (
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // ---------------------------------------------------------------------------

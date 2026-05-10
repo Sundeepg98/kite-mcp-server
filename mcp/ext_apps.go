@@ -23,7 +23,7 @@ import (
 	"github.com/algo2go/kite-mcp-templates"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/paper"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // UICapabilityExtensionKey is the MCP Apps capability key that clients

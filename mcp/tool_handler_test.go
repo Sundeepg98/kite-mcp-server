@@ -13,7 +13,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/algo2go/kite-mcp-oauth"
 )
 
 // ---------------------------------------------------------------------------
