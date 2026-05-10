@@ -19,7 +19,6 @@ COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/
 COPY kc/registry/go.mod kc/registry/go.sum* kc/registry/
 COPY kc/riskguard/go.mod kc/riskguard/go.sum* kc/riskguard/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
-COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
 COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
 COPY kc/eventsourcing/go.mod kc/eventsourcing/go.sum* kc/eventsourcing/
 COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
