@@ -465,13 +465,13 @@ For each verdict class: the concrete next-action and which dispatch/agent should
 
 | Source | Destination | Commit grouping |
 |---|---|---|
-| `.research/STATE-v2-fresh-eyes.md` | `.research/archive/audits-completed/state-v2-fresh-eyes-2026-05-11.md` | Today's-audit-batch |
-| `.research/STATE-claims-audit-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
-| `.research/STATE-fresh-eyes-diff-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
-| `.research/active-docs-verification-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
-| `.research/memory-files-verification-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
-| `.research/repo-docs-verification-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
-| `.research/research-batch-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
+| `.research/audits/2026-05-11/STATE-v2-fresh-eyes.md` | `.research/archive/audits-completed/state-v2-fresh-eyes-2026-05-11.md` | Today's-audit-batch |
+| `.research/audits/2026-05-11/STATE-claims-audit-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
+| `.research/audits/2026-05-11/STATE-fresh-eyes-diff-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
+| `.research/audits/2026-05-11/active-docs-verification-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
+| `.research/audits/2026-05-11/memory-files-verification-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
+| `.research/audits/2026-05-11/repo-docs-verification-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
+| `.research/audits/2026-05-11/research-batch-2026-05-11.md` | `.research/archive/audits-completed/` | Today's-audit-batch |
 | `.research/final-pre-launch-verification.md` | `.research/archive/audits-completed/` | Older-audit-batch |
 | `docs/launch-materials.md` | `docs/archive/launch-materials-pre-tightening.md` OR `.research/archive/audits-completed/` | Launch-cleanup |
 | `docs/release-notes-v1.1.0.md` | `docs/archive/` | Historical-release |

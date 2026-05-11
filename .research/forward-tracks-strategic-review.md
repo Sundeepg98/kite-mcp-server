@@ -487,7 +487,7 @@ Then record Demo GIF (Day +1), continue Reddit warmup (Day +2 to +6), and submit
 - `.research/final-pre-launch-verification.md` — production-staleness empirical + 35-item checklist
 - `.research/demo-recording-production-guide.md` — Demo A 30-second recipe + ScreenToGif winget
 - `.research/team-scaling-cost-benefit-per-axis.md` — hire-trigger ladder + India CTC bands
-- `.research/phase-2-6-r10-decisions.md` (v8) — Phase 2.6 closure reference
+- `.research/decisions/phase-2-6-r10-decisions.md` (v8) — Phase 2.6 closure reference
 - `.research/reddit-subreddit-specific-strategy.md` — Reddit warmup + per-subreddit fit
 - `.research/twitter-build-in-public-weeks-1-4.md` — Twitter cadence post-launch
 - `MEMORY.md` — `kite-mrr-reality.md`, `kite-cost-estimates.md`, `kite-fintech-lawyers.md`, `kite-landmines.md`, `kite-rainmatter-warm-intro.md`, `feedback_research_diminishing_returns.md`, `feedback_decoupling_denominator.md`, `feedback_cheapest_compliance_action.md`

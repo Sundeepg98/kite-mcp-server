@@ -89,7 +89,7 @@ Per active `path-e-try-before-buy-results.md`:
 
 ### 2.1 Production deploy state (NO gap — corrected 2026-05-11)
 
-**Empirical truth** (per chain agent's investigation at `.research/production-master-gap-report.md`, commit `21d5684`):
+**Empirical truth** (per chain agent's investigation at `.research/decisions/production-master-gap-report.md`, commit `21d5684`):
 
 | Field | Master HEAD | Production | Status |
 |---|---|---|---|
