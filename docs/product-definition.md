@@ -2,8 +2,10 @@
 
 **Status:** Canonical. This is what the product *is*, written to be lifted verbatim into a launch deck or README hero. If a fact in this file disagrees with another file in the repo, this file is authoritative for product positioning.
 
-**Last updated:** 2026-05-02
-**Source files cross-checked:** `README.md`, `kc/templates/landing.html`, `.claude-plugin/plugin.json`, `funding.json`, `FUNDING.json`, `server.json`, `docs/drafts/zerodha-compliance-email.md`, `mcp/` package (128 `mcp.NewTool` registration sites across 53 files).
+**Last updated:** 2026-05-11
+**Source files cross-checked:** `README.md`, `kc/templates/landing.html`, `.claude-plugin/plugin.json`, `funding.json`, `FUNDING.json`, `server.json`, `docs/drafts/zerodha-compliance-email.md`, `mcp/` package — **111 production-registered tools** (compile-and-run authoritative; verified via `total_available` from `/healthz` on `kite-mcp-server.fly.dev` and locally-compiled master binary, see `.research/STATE.md` §5.6 + §8.6).
+
+> **Methodology note:** Tool counts here are sourced from compile-and-run (`total_available` in server-version output, or `/healthz` on the deployed instance), NOT from `grep "mcp.NewTool" mcp/`. The grep approach over-counts by ~19 because it sweeps `_test.go` fixtures. The earlier "128" figure was a grep-counting artifact and was corrected at commit `bea1e11` (2026-05-11).
 
 ---
 
@@ -34,7 +36,7 @@ Explicitly *not* for: passive investors, advisor-led clients, anyone who wants s
 6. **Safety and audit** — RiskGuard runs 9 checks before every order (kill switch, per-order ₹50k cap, daily 20-order count, 10/min rate limit, 30s duplicate window, daily ₹2L cumulative cap, idempotency, anomaly detection vs μ+3σ baseline, off-hours block, auto-freeze circuit breaker). Per-tool-call audit trail in SQLite with 90-day retention, CSV/JSON export.
 7. **Inline UI** — MCP Apps widgets render portfolio / orders / alerts / activity inside chat on claude.ai web, Claude Desktop, and ChatGPT (with `openai/outputTemplate` shim). Dashboard at `/dashboard`, `/dashboard/activity`, `/dashboard/orders`, `/dashboard/safety`, `/dashboard/paper`, `/admin/ops`.
 
-**Tool count:** ~80 user-facing MCP tools across 53 source files in `mcp/` (128 `mcp.NewTool` call sites; ~48 of those are admin / test / variant registrations). README and landing page round to "~80".
+**Tool count:** **111 production-registered tools** (authoritative — compile-and-run via `/healthz` `total_available`). README and landing page may round to "~80 user-facing" depending on admin/internal tool framing; the registered surface is 111. The earlier "128 from `grep mcp.NewTool`" figure was an artifact of test-fixture counting (corrected `bea1e11`, 2026-05-11).
 
 ### How users install / connect
 
