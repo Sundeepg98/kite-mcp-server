@@ -234,28 +234,46 @@ Per active `launch-path-execution-playbooks.md`:
 
 Listed by domain. Each entry has a 1-line role description.
 
-### Strategic / state docs (3)
+**Structural note (2026-05-11)**: `.research/` was split into subdirs to make doc-class explicit (per `.research/maintenance-strategy/value-framework.md` Class A-G + 3-tier model + corpus-maintenance synthesis at `.research/CORPUS-MAINTENANCE-STRATEGY.md`):
+
+- `.research/` (root) = **active Tier 1 Live** (STATE.md, INDEX.md, agent-domain-map.md) + **Class C/F synthesis still mid-flight** (forward-tracks, launch-path, 10000-agent, runbooks)
+- `.research/decisions/` (5 files) = **Class B Decision Records** — write-once captures of WHY a path was chosen; never edited in-place; newer-version supersedes
+- `.research/audits/<YYYY-MM-DD>/` (7 files at `2026-05-11/`) = **Class G Ephemera** — point-in-time verification reports; auto-archive after 30 days OR after newer audit-cycle of same scope
+- `.research/maintenance-strategy/` (4 files) = corpus-governance docs (value-framework, maintenance-model, doc-classification, CORPUS-MAINTENANCE-STRATEGY)
+- `.research/archive/<topic>/` = historical reference (preserved for git archaeology only)
+
+### Strategic / state docs (4)
 
 | File | Role | Date |
 |---|---|---|
-| **`STATE.md`** (this) | Canonical source-of-truth — read first | 2026-05-10 |
+| **`STATE.md`** (this) | Canonical source-of-truth — read first | 2026-05-11 |
+| **`INDEX.md`** | Question-keyed lookup table across 7 corpus locations | 2026-05-11 |
 | **`forward-tracks-strategic-review.md`** | 5-track survey + risk audit + top-5-next-moves ranking | 2026-05-10 |
 | **`agent-domain-map.md`** | Live agent → domain mapping for orchestrator routing | 2026-05-09 |
 
-### Phase / architectural state (3)
+### Phase / architectural state — root + decisions/ (3 active)
 
 | File | Role | Date |
 |---|---|---|
-| **`phase-2-6-r10-decisions.md`** (v8) | Phase 2.6 closure framework + libSQL ecosystem reckoning + Step 4 skip rationale | 2026-05-10 |
-| **`path-e-try-before-buy-results.md`** | Track 1 (Turso) success + Track 2 (DO BLR1) falsification — empirical evidence still load-bearing | 2026-05-10 |
+| **`decisions/phase-2-6-r10-decisions.md`** (v8) | Phase 2.6 closure framework + libSQL ecosystem reckoning + Step 4 skip rationale | 2026-05-10 |
+| **`decisions/path-e-try-before-buy-results.md`** | Track 1 (Turso) success + Track 2 (DO BLR1) falsification — empirical evidence still load-bearing | 2026-05-10 |
 | **`10000-agent-blocker-analysis.md`** | Capacity plan reference (Phase 1.4 / Phase 3 / NSE empanelment specs); SEBI rate-limit and IP-whitelist reframings | 2026-05-06 |
 
-### Launch execution (5)
+### Decision records — `decisions/` subdir (Class B, write-once)
+
+| File | Role | Date |
+|---|---|---|
+| **`decisions/phase-2-6-r10-decisions.md`** | v8 closure for libSQL/Turso adoption (also listed in Phase/architectural above) | 2026-05-10 |
+| **`decisions/path-e-try-before-buy-results.md`** | Try-before-buy results for Turso vs DO BLR1 (also listed above) | 2026-05-10 |
+| **`decisions/production-master-gap-report.md`** | Chain agent's investigation falsifying the "production stale" framing | 2026-05-11 |
+| **`decisions/dr-drill-results-2026-05-11.md`** | R2 disaster-recovery drill state + decrypt-probe gap finding | 2026-05-11 |
+| **`decisions/rotate-key-runbook-2026-05-11.md`** | `OAUTH_JWT_SECRET` rotation procedure | 2026-05-11 |
+
+### Launch execution (4) — `final-pre-launch-verification.md` archived at `a772e9c` per §10 protocol
 
 | File | Role | Date |
 |---|---|---|
 | **`launch-path-execution-playbooks.md`** | Per-item execution recipes for #42-#46 cluster (most recent; supersedes prior) | 2026-05-10 |
-| **`final-pre-launch-verification.md`** | 11 pre-flight blockers + 35-item checklist (still load-bearing — production gap not closed) | 2026-05-03 |
 | **`day-1-launch-ops-runbook.md`** | Show-HN day operations: pre-stage `flyctl machines clone`, comment triage, incident response | 2026-05-02 |
 | **`demo-recording-production-guide.md`** | Demo A 30-second recipe + ScreenToGif + 5 embed slots | 2026-05-02 |
 | **`reddit-subreddit-specific-strategy.md`** | Per-sub rules + verbatim r/algotrading post draft + 6-day warmup cadence | 2026-05-02 |
@@ -273,11 +291,60 @@ Listed by domain. Each entry has a 1-line role description.
 |---|---|---|
 | **`team-scaling-cost-benefit-per-axis.md`** | Hire-trigger ladder (vCISO → Senior PD → Senior Architect → Founding Director) + India CTC bands | 2026-05-02 |
 
+### Corpus maintenance — `maintenance-strategy/` subdir (2026-05-11 dispatch)
+
+| File | Role | Date |
+|---|---|---|
+| **`CORPUS-MAINTENANCE-STRATEGY.md`** | Canonical synthesis of value-framework + maintenance-model + doc-classification | 2026-05-11 |
+| **`maintenance-strategy/value-framework.md`** | Abstract criteria — 7 doc classes (A-G) + 3 tiers + 5 long-term-value principles | 2026-05-11 |
+| **`maintenance-strategy/maintenance-model.md`** | Ownership + automation model — stewards per doc-class + frontmatter conventions | 2026-05-11 |
+| **`maintenance-strategy/doc-classification.md`** | Per-doc verdicts across the 280-doc corpus | 2026-05-11 |
+
+### Today's audits — `audits/2026-05-11/` (Class G Ephemera; SOON-TO-ARCHIVE)
+
+7 verification reports produced 2026-05-11. Their verdicts are baked into `maintenance-strategy/doc-classification.md`. Per framework §3.G: auto-archive to `archive/audits-completed/` after 30 days OR newer audit-cycle of same scope.
+
+- `audits/2026-05-11/active-docs-verification-2026-05-11.md`
+- `audits/2026-05-11/memory-files-verification-2026-05-11.md`
+- `audits/2026-05-11/repo-docs-verification-2026-05-11.md`
+- `audits/2026-05-11/STATE-claims-audit-2026-05-11.md`
+- `audits/2026-05-11/STATE-fresh-eyes-diff-2026-05-11.md`
+- `audits/2026-05-11/STATE-v2-fresh-eyes.md`
+- `audits/2026-05-11/research-batch-2026-05-11.md`
+
 ---
 
 ## §7 — Archive index
 
-All archived docs preserved at `.research/archive/<topic>/` via `git mv` (history preserved). 80 docs archived in 5 categories.
+**Three categories of historical-reference subdirs (2026-05-11 structural split)**:
+
+1. **`.research/archive/<topic>/`** — historical reference; preserved for git archaeology only. 5 sub-categories below; 80+ docs total.
+2. **`.research/audits/<YYYY-MM-DD>/`** — Class G Ephemera (point-in-time verification reports). Active until 30-day auto-archive. Current: `audits/2026-05-11/` with 7 reports.
+3. **`.research/decisions/`** — Class B Decision Records. Write-once; newer-version supersedes; never edited in-place. Current: 5 decision records.
+
+`audits/` rolls into `archive/audits-completed/` after 30 days OR after a newer audit-cycle of the same scope. `decisions/` stays indefinitely (audit trail).
+
+### `.research/decisions/` (5 active decision records)
+
+- `phase-2-6-r10-decisions.md` (v8) — Phase 2.6 closure; libSQL/Turso adoption + Step 4 skip
+- `path-e-try-before-buy-results.md` — Try-before-buy empirical (Turso ✓; DO BLR1 payment-method-gated)
+- `production-master-gap-report.md` — Chain agent's "no gap exists" investigation
+- `dr-drill-results-2026-05-11.md` — R2 disaster-recovery drill + decrypt-probe gap finding
+- `rotate-key-runbook-2026-05-11.md` — `OAUTH_JWT_SECRET` rotation procedure
+
+### `.research/audits/2026-05-11/` (7 files — current cycle)
+
+- `active-docs-verification-2026-05-11.md` (16/20 active docs verified)
+- `memory-files-verification-2026-05-11.md` (76 memory files audited)
+- `repo-docs-verification-2026-05-11.md` (22/124 repo docs deep-read)
+- `STATE-claims-audit-2026-05-11.md` (claim-by-claim grading of STATE.md)
+- `STATE-fresh-eyes-diff-2026-05-11.md` (independent re-synthesis diff)
+- `STATE-v2-fresh-eyes.md` (fresh-eyes STATE re-synthesis)
+- `research-batch-2026-05-11.md` (14-question synthesis batch)
+
+### `.research/archive/<topic>/` — historical reference (80+ docs, 5 sub-categories below)
+
+All archived docs preserved via `git mv` (history preserved).
 
 ### `.research/archive/path-a-modules/` (30 files)
 
@@ -438,12 +505,25 @@ One-off investigations + diagnostic findings + retired plans.
 
 ## §10 — Maintenance protocol
 
+### Structural division (2026-05-11)
+
+`.research/` now has 4 distinct subdirs for 4 distinct doc lifecycles. **Each new research doc must land in the right subdir on creation, not get re-classified later.** Per `.research/maintenance-strategy/value-framework.md` §3:
+
+| Subdir | Lifecycle | Class | When to write here |
+|---|---|---|---|
+| `.research/` (root) | Active Live + active synthesis | A (Canonical State) + F (Synthesis mid-flight) | Singletons (STATE, INDEX, agent-domain-map); active synthesis docs being iterated on |
+| `.research/decisions/` | Write-once; never edited | B (Decision Records) | Capturing WHY a path was chosen + alternatives + falsifications. New version = new file (e.g., `r10-v9-decisions.md`); old stays. |
+| `.research/audits/<YYYY-MM-DD>/` | Write-once; auto-archive after 30 days | G (Ephemera — verification reports) | Point-in-time audits (verification reports, claims-audits, fresh-eyes diffs). Filename includes date for visible decay-by-design. |
+| `.research/maintenance-strategy/` | Quasi-singleton; supersede-only | A + F (corpus-governance) | Value-framework, maintenance-model, doc-classification. Pair with `CORPUS-MAINTENANCE-STRATEGY.md` at `.research/` root as canonical synthesis. |
+| `.research/archive/<topic>/` | Historical reference; never delete | (any class after lifecycle ended) | Anything that ran its course (audits-completed, path-a-modules, tier-anchor-design, phase-2-completed, session-scratch). |
+
 ### When to update STATE.md
 
 1. **After any structural commit** that changes (a) module count, (b) tool count, (c) production deploy, (d) phase closure, (e) major decision: update §1 + §2 + relevant §3-§5 sections.
 2. **After archiving any new docs**: update §6 (active list) + §7 (archive index).
 3. **After resolving any conflict surfaced in §8**: cross out the entry with the date of resolution.
 4. **When a §9 gap is empirically resolved**: move the entry to §5 (key findings) and note the verification date.
+5. **After any `git mv` between subdirs** (active ↔ decisions/ ↔ audits/ ↔ archive/): update §6 and §7 references in the same commit; patch any cross-references in active docs.
 
 ### When NOT to update STATE.md
 
@@ -451,16 +531,29 @@ One-off investigations + diagnostic findings + retired plans.
 - Don't update after every commit; daily-summary cadence is fine.
 - Don't update for archived-doc reads (consult-only operations).
 
-### Archive a doc
+### Archive a doc (and migrate between subdirs)
 
 ```bash
 # from D:/Sundeep/projects/kite-mcp-server
+
+# === Variant 1: a written-once decision record goes to decisions/ subdir ===
+git mv .research/<file>.md .research/decisions/<file>.md
+
+# === Variant 2: a point-in-time audit/verification report goes to audits/<date>/ subdir ===
+mkdir -p .research/audits/<YYYY-MM-DD>
+git mv .research/<file>.md .research/audits/<YYYY-MM-DD>/<file>.md
+
+# === Variant 3: a fully-completed doc goes to archive/<topic>/ ===
 git mv .research/<file>.md .research/archive/<topic>/<file>.md
-# Update STATE.md §6 (remove from active list) + §7 (add to archive index)
-git add .research/STATE.md
-git commit -m "docs(research): archive <file> + STATE.md update" \
-    -o -- .research/STATE.md ".research/archive/<topic>/<file>.md" \
-          .research/<file>.md
+
+# In every variant:
+# 1. Update STATE.md §6 (remove from active list) + §7 (add to relevant subdir)
+# 2. Update INDEX.md cross-references (sed-rename any .research/<file>.md references)
+# 3. Patch any active synthesis docs that referenced the moved file
+git add .research/STATE.md .research/INDEX.md <other-modified-active-docs>
+git commit -m "docs(research): migrate <file> to <new-location> + cross-ref patches" \
+    -o -- .research/STATE.md .research/INDEX.md ".research/<new-location>/<file>.md" \
+          .research/<file>.md <other-modified-active-docs>
 git push
 ```
 
