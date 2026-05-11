@@ -6,6 +6,16 @@
 **Charter**: research-only execution playbooks. Doc-only. NO code changes. Per-item: dispatch procedure + halts + credentials + success criteria + cleanup.
 **Concurrency**: Path A owner in flight on C1+C2+C3 cleanup chain (disjoint scope). All other agents idle.
 
+> ## STATUS as of 2026-05-11 (Track C maintenance pass)
+>
+> **This is a mid-flight runbook — KEEP active until Show HN is submitted (item #5).**
+>
+> - Item #5 (Show HN) is NOT yet submitted (GitHub repo at 0 stars per `.research/research-batch-2026-05-11.md` §H).
+> - Items #1-#4 + #5b status not separately re-verified in this Track C pass; consult agent dispatch logs.
+> - **Archive trigger**: Move this file to `.research/archive/` once item #5 (Show HN submit) completes — at that point the playbook becomes historical reference rather than active runbook.
+> - **Re-verification trigger**: If item #5 has not fired by 2026-06-15 (~5 weeks from now), surface to user for re-prioritization rather than auto-archive.
+> - Reviewed by Track C agent under `.research/track-c-decisions-2026-05-11.md` item 1 (decision: KEEP + status banner).
+
 **Production state at audit-time**:
 - Master HEAD: `bcbe9f0`
 - Production: v1.3.0 / tools=111 (production = master HEAD modulo `.research/`-only commits per `production-master-gap-report.md` — the "550+ commits stale" framing from `forward-tracks-strategic-review.md` is FALSIFIED 2026-05-11; no deploy backlog exists)
