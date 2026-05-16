@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     # Requires R2 secrets configured at repo level. Skipped on forks
     # because secrets do not propagate.
-    if: ${{ github.repository == 'Sundeepg98/kite-mcp-server' }}
+    if: ${{ github.repository == 'algo2go/kite-mcp-server' }}
     steps:
       - uses: actions/checkout@v4
 

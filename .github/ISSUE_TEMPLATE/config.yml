@@ -1,10 +1,10 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Discussions
-    url: https://github.com/Sundeepg98/kite-mcp-server/discussions
+    url: https://github.com/algo2go/kite-mcp-server/discussions
     about: Ask questions, share strategies, discuss ideas with other users.
   - name: Security vulnerability
-    url: https://github.com/Sundeepg98/kite-mcp-server/blob/master/SECURITY.md
+    url: https://github.com/algo2go/kite-mcp-server/blob/master/SECURITY.md
     about: Read SECURITY.md for disclosure process — do NOT file a public issue for security
   - name: Compliance / legal
     url: mailto:sundeepg8@gmail.com

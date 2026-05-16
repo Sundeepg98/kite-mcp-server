@@ -5,7 +5,7 @@
   "description": "Open-source MCP server for Zerodha Kite Connect. Portfolio, market data, backtesting, alerts.",
   "websiteUrl": "https://kite-mcp-server.fly.dev",
   "repository": {
-    "url": "https://github.com/Sundeepg98/kite-mcp-server",
+    "url": "https://github.com/algo2go/kite-mcp-server",
     "source": "github",
     "id": "1164168480"
   },

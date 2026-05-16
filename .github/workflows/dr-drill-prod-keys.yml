@@ -46,7 +46,7 @@ jobs:
     # green on a fresh fork without committing any production-secret hard
     # dependency. When the operator provisions the secret, the next
     # monthly cron starts firing the drill end-to-end.
-    if: ${{ github.repository == 'Sundeepg98/kite-mcp-server' && secrets.OAUTH_JWT_SECRET != '' }}
+    if: ${{ github.repository == 'algo2go/kite-mcp-server' && secrets.OAUTH_JWT_SECRET != '' }}
 
     steps:
       - uses: actions/checkout@v4

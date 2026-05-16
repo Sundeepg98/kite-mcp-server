@@ -42,7 +42,7 @@ Please confirm you have checked these before filing:
 - [ ] Did you whitelist the static egress IP `209.71.68.157` in your Kite developer console? (Required since SEBI April 2026 mandate for order placement.)
 - [ ] Is your Kite access token fresh? (Tokens expire daily at ~6 AM IST — re-login if older.)
 - [ ] If using paper trading, did you explicitly enable it? (Otherwise orders hit real Kite.)
-- [ ] Have you searched [existing issues](https://github.com/Sundeepg98/kite-mcp-server/issues) for this problem?
+- [ ] Have you searched [existing issues](https://github.com/algo2go/kite-mcp-server/issues) for this problem?
 
 ## Logs
 

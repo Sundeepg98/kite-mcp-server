@@ -12,7 +12,7 @@
   "homepage": "https://kite-mcp-server.fly.dev/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sundeepg98/kite-mcp-server"
+    "url": "https://github.com/algo2go/kite-mcp-server"
   },
   "keywords": ["zerodha", "kite-connect", "trading", "indian-markets", "nse", "bse", "mcp", "algotrading"],
   "mcpServers": {

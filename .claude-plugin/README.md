@@ -5,7 +5,7 @@ Installs an MCP server + 8 Skills for power-user trading on Zerodha Kite.
 ## Install via Claude Code
 
 ```
-/plugin install kite@github.com/Sundeepg98/kite-mcp-server
+/plugin install kite@github.com/algo2go/kite-mcp-server
 ```
 
 ## Manual install
