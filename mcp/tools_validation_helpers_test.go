@@ -69,8 +69,9 @@ func TestValidateRequired_BoolFalse(t *testing.T) {
 
 func TestIsAlphanumeric_LoginKeys(t *testing.T) {
 	t.Parallel()
-	// Valid API keys
-	assert.True(t, paper.IsAlphanumeric("4agbg2fm6szvmhon"))
+	// Valid API keys (16-char lowercase alphanumeric, matching Kite API key shape).
+	// Using a synthetic placeholder rather than a real key per 2026-05-11 redaction.
+	assert.True(t, paper.IsAlphanumeric("examplekey123456"))
 	assert.True(t, paper.IsAlphanumeric("ABC123def"))
 	// Invalid API keys
 	assert.False(t, paper.IsAlphanumeric("invalid-key!"))
