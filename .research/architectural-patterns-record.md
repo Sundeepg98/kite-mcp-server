@@ -47,8 +47,8 @@ Refactor agents facing a decomposition / extension / cross-cutting-concern decis
 4. **Follow the canonical precedent** — copy the shape, don't invent.
 5. **Cite this doc** in commit message: `Pattern §N per architectural-patterns-record.md`.
 
-If no pattern matches → §11 "When to introduce a NEW pattern" rules apply.
-If two patterns conflict → §12 "Pattern-conflict resolution" rules apply.
+If no pattern matches → §12 "When to introduce a NEW pattern" rules apply.
+If two patterns conflict → §13 "Pattern-conflict resolution" rules apply.
 
 ---
 
@@ -500,7 +500,71 @@ type (
 
 ---
 
-## §11 — When to introduce a NEW pattern
+## §11 — Point-of-Use Wrap (DTO at the producer; rich entity at the consumer)
+
+*Added 2026-05-16 per Brief 2.B verdict — see `.research/brief-2b-service-layer-domain-emission-2026-05-16.md`.*
+
+**Use when**: a producer service or use-case must return broker/vendor DTOs (because most consumers only need JSON-emission of strings), but a minority of consumers need rich-entity behavior (status classification, PnL math, can-cancel checks, fill-percentage computation, lifecycle predicates). Wrap-call density is empirically **low** — fewer than ~5 wrap sites per consuming file.
+
+**Don't use when**: wrap-call density is high (>5× the file count), OR a single DTO grows >8 lifecycle-method calls clustered in one consumer (then promote to §1 Provider Interface or a typed Service method). Empirical falsifiability triggers are listed below.
+
+**Intent**: keep producers narrow (one DTO-shaped return type) while letting individual consumers lift to a domain entity at the exact line they need lifecycle behavior. The lift is a single function call: `domain.NewXFromBroker(dto)`. Most consumers never invoke the lift; the few that do, do so visibly at the point of use.
+
+**Structure**:
+```go
+// Producer returns DTO (broker shape). One method, one return type.
+func (s *OrderService) GetOrders(email string) ([]broker.Order, error) { … }
+
+// Consumer iterates DTOs and lifts on demand at the exact line that needs
+// the lifecycle predicate. No three-layer indirection chase; the wrap call
+// IS the documentation that domain logic runs here.
+for i := range history {
+    if domain.NewOrderFromBroker(history[i]).IsComplete() {
+        // … lifecycle-aware branch
+    }
+}
+```
+
+**Canonical precedents** (from Brief 2.B's empirical site enumeration):
+
+| Site | File:line | What gets lifted | Why |
+|---|---|---|---|
+| 1 | `algo2go/kite-mcp-kc/fill_watcher.go:375` | `broker.Order` → `domain.Order` | `IsComplete()` predicate gates the polling-loop early-exit |
+| 2 | `algo2go/kite-mcp-bootstrap/kc/usecases/close_position.go:201` | `broker.Position` → `domain.Position` | Lifecycle methods on the matched position before issuing the close order |
+| 3 | `algo2go/kite-mcp-bootstrap/kc/usecases/widget_usecases.go:198` (+2 more in same file) | `broker.Holding/Position` → `domain.{Holding,Position}` | PnL + `IsHeld()` for widget rendering |
+
+Aggregate empirical scope at HEAD: **~9 wrap sites across ~7 files** (density ~1.3× — well under the falsifiability trigger). See Brief 2.B §INPUTS rows #14, #15, #17 for direct probes.
+
+**How to slot in (new consumer site)**:
+1. Producer signature stays unchanged — emit the broker DTO.
+2. At the consumer call site, after receiving the DTO, write `o := domain.NewOrderFromBroker(b)` (or the `{Position,Holding}` variant).
+3. Call `.IsComplete()` / `.IsHeld()` / `.PnL()` / etc. directly on the rich entity.
+4. NO new method on the producer, NO new variant constructor, NO `…Domain` suffix on the service method.
+
+**Conflict resolution with §5 Port+Adapter+Conformance** (the consumer-side dual):
+- §5 narrows the **producer** surface — `broker.Client` exposes 9 sub-interfaces so consumers ask for only what they need.
+- §11 narrows the **return type** at producer emission — DTOs always, never an `…Domain` variant for the lifecycle-needing minority.
+- Both express the same principle from opposite sides: refuse to thicken the producer surface for a minority consumer. §11 is the consumer-side dual to §5's producer-side narrowing. They compose: a §5-shaped port returns §11-shaped DTOs, and consumers lift only when needed.
+
+**Conflict resolution with §1 Provider Interface**:
+- §1 applies when MULTIPLE consumers need the same narrow interface — promote to a named Provider port.
+- §11 applies when ONE consumer (or a small minority) needs lifecycle behavior on a DTO most other consumers treat as opaque.
+- If §11 wrap-density rises above the falsifiability trigger, promote to §1 (the wrap becomes a named `domain.Order` Provider method on the service).
+
+**Falsifiability triggers** (per Brief 2.B verdict — re-evaluate Shape B if ANY fires):
+1. **5× density rise**: wrap-call density crosses 5× the file count (e.g., 35+ wrap sites across 7 files). Currently 1.3×.
+2. **8+ method cluster**: a single DTO accumulates 8+ lifecycle-method calls clustered in one consumer. Currently the largest cluster is ~3 calls in `widget_usecases.go`.
+3. **Multi-broker adapter lands**: a non-Zerodha adapter (Upstox, Dhan) ships, AND its DTOs differ structurally enough that the `NewXFromBroker` constructors fork per-vendor.
+4. **MCP-tool-framework type requirement**: a future MCP framework feature requires returning domain types (not DTOs) from tool handlers.
+5. **Consumer count for the same wrap pattern crosses 5**: e.g., five distinct callers all write `domain.NewOrderFromBroker(b).IsComplete()`. Then it earns a named Provider method.
+
+First trigger fires → run the Brief 2.B re-evaluation against the new evidence; consider promotion to §1 Provider Interface OR adoption of Shape B (the rejected alternative).
+
+**Why this is a pattern (not a candidate)**: per §12 promotion criteria below (formerly §11 before this insertion), three production precedents exist (`fill_watcher.go:375`, `close_position.go:201`, `widget_usecases.go:198`). The Brief 2.B analysis pre-rejected Shape B as the alternative; pattern §11 codifies the *winning* shape so future agents don't re-derive the analysis.
+
+---
+
+## §12 — When to introduce a NEW pattern
 
 A new pattern is justified when:
 
@@ -509,7 +573,7 @@ A new pattern is justified when:
 3. **The pattern is empirically grounded** — recovered from working code, not invented from a design doc.
 4. **The pattern complements existing 10 patterns** — does not overlap >50% with any §1-§10.
 
-If only ONE precedent exists, document it as an ADR (or in §13 below as "candidate pattern") and wait for the second precedent.
+If only ONE precedent exists, document it as an ADR (or in §14 below as "candidate pattern") and wait for the second precedent.
 
 **Anti-justifications** (do NOT introduce a pattern for):
 - Theoretical elegance with no real precedent
@@ -519,7 +583,7 @@ If only ONE precedent exists, document it as an ADR (or in §13 below as "candid
 
 ---
 
-## §12 — Pattern-conflict resolution
+## §13 — Pattern-conflict resolution
 
 When two patterns could apply to the same decision:
 
@@ -532,12 +596,14 @@ When two patterns could apply to the same decision:
 | §8 CQRS Bus vs direct call | CQRS if write/read needs cross-cutting audit/observability; direct if simple method | Bus reflection cost only justified when middleware adds value |
 | §9 ES vs §8 CQRS write-store | §8 (today) | ES is test-only today per its source documentation |
 | §4 Plugin Registry vs explicit register | §4 if per-domain agents add tools concurrently; explicit if startup-only wire from main | Plugin registry decouples agents (Investment J); explicit is fine for single-agent wire |
+| §11 Point-of-Use Wrap vs §5 Port+Adapter+Conformance | Both — they are duals. §5 narrows the producer surface (sub-interfaces); §11 narrows the producer return type (DTOs, not rich entities). Compose them. | A §5 port returns §11-shaped DTOs; consumers lift only when needed. Both refuse to thicken the producer for a minority consumer. |
+| §11 Point-of-Use Wrap vs §1 Provider Interface | §11 if wrap-density is low (<5× file count) AND consumer cluster is small; §1 (promote to a named Provider method) if density rises above the falsifiability trigger. | §11 is the early-stage default; §1 is the graduation target once empirical re-use justifies the named interface. |
 
 **Last-resort rule**: if no resolution above applies, **the pattern with more existing call sites wins**. Don't fragment an established pattern across two competing implementations.
 
 ---
 
-## §13 — Candidate patterns (ONE precedent, need a second)
+## §14 — Candidate patterns (ONE precedent, need a second)
 
 These have ONE production precedent but haven't earned full pattern status yet. Document here so future agents can promote them with a second instance.
 
@@ -551,7 +617,7 @@ These have ONE production precedent but haven't earned full pattern status yet. 
 
 ---
 
-## §14 — Empirical surprises
+## §15 — Empirical surprises
 
 1. **Provider Interface is the load-bearing decoupling primitive** — Sprint 2-4 wall (`session_2026-05-16_decomposition-arc-complete.md` lines 78-82) empirically rejected "drain accessor" as a decomposition technique. The lesson: methods (not fields) are interface-satisfying, so the Provider Interface pattern depends on Manager keeping its METHOD form. Field-exposure REGRESSES the architecture.
 
@@ -579,7 +645,7 @@ These have ONE production precedent but haven't earned full pattern status yet. 
 
 ---
 
-## §15 — Cross-reference index
+## §16 — Cross-reference index
 
 | Pattern | Module precedent | Primary file | Test file |
 |---|---|---|---|
@@ -594,18 +660,19 @@ These have ONE production precedent but haven't earned full pattern status yet. 
 | §8 CQRS Bus | kite-mcp-cqrs | bus.go | bus_test.go + cqrs_test.go |
 | §9 Event Sourcing | kite-mcp-eventsourcing | aggregate.go | aggregate_edge_test.go |
 | §10 Aliases shim | kite-mcp-bootstrap | mcp/aliases.go | (compile-time only) |
+| §11 Point-of-Use Wrap | kite-mcp-kc + bootstrap/kc/usecases | fill_watcher.go:375, close_position.go:201, widget_usecases.go:198 | Brief 2.B § INPUTS rows #14, #15, #17 |
 
 ---
 
-## §16 — Update protocol
+## §17 — Update protocol
 
 This doc is a Decision Record, not a tutorial. Update when:
 
-1. **A new pattern is empirically promoted** from §13 (Candidate) → §1-§10 (full pattern). Requires 2+ precedents and a §11-criteria check.
+1. **A new pattern is empirically promoted** from §14 (Candidate) → §1-§11 (full pattern). Requires 2+ precedents and a §12-criteria check.
 2. **A pattern is empirically deprecated** — e.g. if Event Sourcing (§9) is wired into production, update §9's "Use when" and reclassify.
-3. **A wall is discovered** that no pattern handles. Add to §14 (Empirical surprises) with file:line cite. Future agents must NOT re-derive.
-4. **Pattern conflicts** that §12 doesn't resolve. Add new row.
-5. **Re-verify cadence**: every 90 days (per `re-verify-by` frontmatter), re-probe each §15 file:line cite to ensure HEADs still match.
+3. **A wall is discovered** that no pattern handles. Add to §15 (Empirical surprises) with file:line cite. Future agents must NOT re-derive.
+4. **Pattern conflicts** that §13 doesn't resolve. Add new row.
+5. **Re-verify cadence**: every 90 days (per `re-verify-by` frontmatter), re-probe each §16 file:line cite to ensure HEADs still match.
 
 Edits must:
 - Preserve §INPUTS verification format
@@ -615,4 +682,6 @@ Edits must:
 
 ---
 
-*Generated 2026-05-16, read-only DR. 10 canonical patterns codified + 5 candidate patterns. NO code mutations. Next refactor agent dispatch (Audit's Manager-decomp re-survey) should cite `§N per architectural-patterns-record.md` instead of re-deriving.*
+*Generated 2026-05-16, read-only DR. 11 canonical patterns codified + 5 candidate patterns. NO code mutations. Next refactor agent dispatch (Audit's Manager-decomp re-survey) should cite `§N per architectural-patterns-record.md` instead of re-deriving.*
+
+*Updated 2026-05-16 (same-day): §11 Point-of-Use Wrap added per Brief 2.B verdict (Shape A stay vs Shape B service-emission). Cross-link: `.research/brief-2b-service-layer-domain-emission-2026-05-16.md`. Existing §11-§16 renumbered to §12-§17. Patterns count: 10 → 11.*
