@@ -3,6 +3,13 @@
 .env.local
 .env.*.local
 
+# Local dev launcher copies — keep literal credentials out of git
+# (canonical templates run-server.cmd / run-server-oauth.cmd are tracked but
+# have no literal secrets; users copy them to *.local.cmd to add their own.)
+*.local.cmd
+run-server.local.*
+run-server-oauth.local.*
+
 # Go build artifacts
 *.exe
 *.exe~
