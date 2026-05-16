@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -22,9 +23,20 @@ import (
 // buildProbe compiles the probe binary into a tempdir and returns its
 // path. Tests share one build per package-test invocation by relying on
 // t.TempDir's lifecycle and Go's per-package test process.
+//
+// Cross-platform: appends `.exe` on Windows so `exec.Command` can locate
+// the binary. Without the extension, Windows' CreateProcess returns
+// "executable file not found in %PATH%" even when the file exists at the
+// exact path passed -- the OS resolver requires the extension when no
+// PATHEXT lookup is desired. Verified 2026-05-16 against go1.25.6 on
+// windows/amd64.
 func buildProbe(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "dr-decrypt-probe")
+	binName := "dr-decrypt-probe"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	bin := filepath.Join(t.TempDir(), binName)
 	if os.Getenv("PROBE_BUILD_SKIP") != "" {
 		// Allows CI to pre-build once and reuse.
 		if pre := os.Getenv("PROBE_BIN"); pre != "" {
