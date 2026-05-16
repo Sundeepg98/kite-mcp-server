@@ -1,8 +1,9 @@
 # STATE.md — Canonical Research Source-of-Truth
 
-**Date**: 2026-05-10
-**Master HEAD**: `bc5043e` (`docs(launch-playbooks): per-item execution playbooks for #42-46 cluster`)
+**Date**: 2026-05-16 (refreshed after 41 commits since the 2026-05-11 structural-split refresh at `866bcf5`)
+**Master HEAD**: `6e72014` (`chore(repo): prepare for transfer to algo2go org — patch 8 hard-coded URL refs`)
 **Production**: v1.3.0 / tools=111 (Fly.io BOM region; machine version 273, image `deployment-01KR9FPJC88YA80VWS7VMTWTY7`, deployed 2026-05-10 17:44 UTC against commit `bc5043e`)
+**Production-vs-master gap**: still ZERO source mutations (all 80+ commits between deploy-commit and HEAD are `.research/`-only OR are deploy-prep doc/test commits excluded from Docker build context). No `flyctl deploy` needed for code; deploy-prep work landed (Item 1 of today's batch patched 8 hard-coded `Sundeepg98/kite-mcp-server` refs in tracked workflow + config files, ready for the GitHub org-transfer when user authorizes).
 **Charter**: this is THE doc the orchestrator reads first. Everything else in `.research/` is supporting reference; archive is historical.
 
 ---
@@ -26,22 +27,27 @@
 
 ---
 
-## §1 — Architectural state at HEAD `bc5043e`
+## §1 — Architectural state at HEAD `6e72014`
 
 ### 1.1 Repository structure
 
 | Layer | State | Source-of-truth |
 |---|---|---|
-| **In-tree workspace members** | **4** (root + plugins + testutil + app/providers) | `go.work:1-90` |
-| **External algo2go modules** | **28** | `D:/Sundeep/projects/algo2go/*` |
-| **Algo2go module list (alphabetical)** | alerts, aop, audit, billing, broker, clockport, cqrs, decorators, domain, eventsourcing, i18n, instruments, isttz, legaldocs, logger, money, oauth, papertrading, registry, riskguard, scheduler, sectors, telegram, templates, ticker, usecases, users, watchlist | `ls D:/Sundeep/projects/algo2go/` |
-| **Total commits** | 1,357 lifetime | `git log --oneline | wc -l` |
-| **Recent cadence** | 585 commits last 2 weeks; 931 commits in April 2026 alone | `git log --since` |
+| **In-tree workspace members (kite-mcp-server master)** | **4** (root + plugins + testutil + app/providers) | `go.work:1-90` |
+| **In-tree workspace members (bootstrap-relocation branch)** | **1** (root only — workspace siblings moved to bootstrap) | `git show bootstrap-relocation:go.work` |
+| **External algo2go modules** | **28 domain + 1 bootstrap = 29 total** | `D:/Sundeep/projects/algo2go/*` |
+| **Algo2go module list (alphabetical)** | alerts, aop, audit, billing, broker, clockport, cqrs, decorators, domain, eventsourcing, i18n, instruments, isttz, legaldocs, logger, money, oauth, papertrading, registry, riskguard, scheduler, sectors, telegram, templates, ticker, usecases, users, watchlist + **bootstrap** (Sprint-0; created 2026-05-16) | `ls D:/Sundeep/projects/algo2go/` |
+| **algo2go modules consumed by production (master)** | **27 of 28** — `kite-mcp-aop` is promoted but ORPHANED (`go mod why` says "main module does not need package") | `go list -m all` empirical probe |
+| **Sprint 0 bootstrap-relocation status** | branch `bootstrap-relocation` at `deefac1` pushed to origin; **NOT yet merged to master**. Bootstrap repo `algo2go/kite-mcp-bootstrap` at `f4e2215` (master) is consuming the 49,400-LOC composition root | `git ls-remote origin bootstrap-relocation` + `git ls-remote https://github.com/algo2go/kite-mcp-bootstrap` |
+| **In-tree non-test LOC on master** | 54,504 (kc=17,820 + app=10,371 + mcp=24,358 + plugins=321 + testutil=825 + cmd=546 + examples=123 + root=441) | per `algo2go-dependency-state-2026-05-11.md` |
+| **In-tree non-test LOC on bootstrap-relocation branch** | **710** (cmd=546 + examples=123 + root=41 main.go + 87 fly_toml_test.go + 108 main_test.go) — **98.7% reduction** | same |
+| **Total commits** | 1,397 lifetime (40 commits since 2026-05-11 STATE refresh; mostly research docs + security redactions + Sprint 0 + activation chores) | `git log --oneline | wc -l` |
 | **Production deploy count** | ~84 consecutive (per dispatch metadata; empirically verifiable via `flyctl releases list`) | `flyctl` (auth-gated) |
 | **Total tests** | ~9,000 across ~437 test files | per `final-pre-launch-verification.md` |
 | **MCP tools (production-registered)** | **111** | `curl /healthz` AND chain-agent's local `go build` + run: startup log says `registered=93 gated_trading=18 total_available=111` |
 | **MCP tools (master-built binary)** | **111** | identical to production — verified by compiling current master HEAD locally (per `production-master-gap-report.md` §1.4) |
 | **Tool count delta** | **0** — no gap exists | the prior "+19 in-tree tools not deployed" claim was a grep error: `grep -rE 'mcp\.NewTool\("' mcp/` includes 19 calls in `_test.go` fixture files. **Footnote for future synthesis**: when counting tools, MUST filter `--include='*.go' \| grep -v _test.go` OR (preferred) compile-and-run the binary to read the `total_available=N` startup log line. Pure grep over `mcp/` over-counts by ~19 test-fixture lines. |
+| **Dependency-state ladder (code we own under algo2go)** | Today (master): 46% in algo2go, 54% in-tree → Post-Sprint-0-merge: **99.3% in algo2go**, 0.7% deploy thin-shell → Post-org-transfer: **literal 100%** all repos under algo2go org | `algo2go-dependency-state-2026-05-11.md` + `path-to-100-percent-algo2go-2026-05-11.md` |
 
 ### 1.2 Tier 1 + Tier 2 in-tree refactor state
 
@@ -123,12 +129,34 @@ Per active `launch-path-execution-playbooks.md` §Item 5:
 
 Per active `algo2go-reservation-runbook.md`:
 - `algo2go.com` AVAILABLE as of 2026-05-03 RDAP check
-- `algo2go` GitHub org AVAILABLE
+- `algo2go` GitHub org **CREATED 2026-05-05** (29 public repos: 28 domain modules + bootstrap as of 2026-05-16)
 - `algo2go` on npm + PyPI AVAILABLE
 - TM filing direct via ipindiaonline.gov.in: ₹4,500/class for individual filer
 - Class 9 (software) + Class 42 (SaaS) = ₹9,000 total
 - Trade-off: Vakilsearch / LegalWiz path is ₹19-22k (₹10-13k savings via direct)
 - Backup name `tradarc.com` is **NOT clean** (registered to Italian registrant since 2001-05-04; expired 2026-05-04 but most domains auto-renew — don't gamble)
+
+### 2.4 Path to literal 100% algo2go — staged work (NEW 2026-05-16)
+
+Per active `path-to-100-percent-algo2go-2026-05-11.md`:
+- **Today**: 99.3% of code we own is under `algo2go/*` post-Sprint-0-merge (just 710 LOC of deploy-thin-shell remains on `Sundeepg98/kite-mcp-server`)
+- **30-second user action to close the gap**: `gh api -X POST repos/Sundeepg98/kite-mcp-server/transfer -F new_owner=algo2go`
+- **Empirically verified Fly impact**: ZERO — `flyctl status` shows `Owner=personal` (Fly org), `Image=kite-mcp-server:deployment-...` (built+pushed locally, not pulled from GitHub URL). `fly.toml` has zero GitHub URL refs.
+- **Empirically verified mcp-remote impact**: ZERO — cache keyed by Fly URL (`kite-mcp-server.fly.dev/mcp`), unchanged by GitHub transfer.
+- **Empirically verified GitHub Actions secrets state**: empty (zero secrets configured today; nothing to preserve through transfer)
+- **MCP Registry name gotcha**: `io.github.Sundeepg98/kite-mcp-server` v1.2.0 active, isLatest=true, publishedAt 2026-04-19. Registry primary-key `name` is permanently locked; only `repository.url` is mutable via next-version publish. **Resolution**: accept legacy name (Path 5.3.a in source doc); update `repository.url` post-transfer (Item 1 of today's batch already did this in source server.json at `6e72014`).
+- **Deploy-prep work landed today**: Item 1 (`6e72014`) patched 8 hard-coded `Sundeepg98/kite-mcp-server` URL references — including the CRITICAL `dr-drill.yml` + `dr-drill-prod-keys.yml` `if: github.repository ==` hard checks that would have silently skipped post-transfer.
+
+### 2.5 Sprint 0 bootstrap-relocation state (NEW 2026-05-16)
+
+Per `algo2go-dependency-state-2026-05-11.md` + Sprint 0 dispatch evidence at `bc76c76` (initial) + `deefac1` (branch tip):
+- Branch: `bootstrap-relocation` pushed to `origin`; PR-ready at `https://github.com/Sundeepg98/kite-mcp-server/pull/new/bootstrap-relocation`
+- 516 .go files moved from kite-mcp-server in-tree (kc/+app/+mcp/+plugins/+testutil/) to `algo2go/kite-mcp-bootstrap`
+- 373 import lines bulk-rewritten (`github.com/zerodha/kite-mcp-server/*` → `github.com/algo2go/kite-mcp-bootstrap/*`)
+- All 4 workspace members (root + app/providers + plugins + testutil) compile clean on bootstrap repo
+- `go test ./...` exit 0 across all 18 bootstrap packages (~67s wall-clock)
+- Bonus quality fixes shipped: SA1012 nil-context fix in `bootstrap_test.go`, timezone-sensitive test correctness in `app/app_test.go` (3 cases), `go mod tidy` direct/indirect classification
+- Production unaffected: kite-mcp-server master still at `b6b4f6a` source-code-wise (Sprint 0 not yet merged); branch is for user review
 
 Per active `launch-path-execution-playbooks.md` §Item 4:
 - 5 user halts: scope confirm → IPIndia login → form review → PAN upload → DSC-or-affidavit → payment
@@ -228,19 +256,79 @@ Per active `launch-path-execution-playbooks.md`:
 
 **The earlier "production deploy gap is THE blocker" finding (held in this slot through 2026-05-03 → 2026-05-10) is FALSIFIED.** No gap existed. The dispatch-chain reports of v228 → v274 deploys were real; production bit-equivalent to master HEAD modulo `.research/`-only commits.
 
+### 5.7 209.71.68.157 egress-IP claim is STALE (2026-05-11 falsification)
+
+**Finding** (per `egress-ip-stale-sweep-2026-05-11.md`, commit `7559133`): the `209.71.68.157` IP value cited across multiple docs (server.json `deployment.egressIp`, README, scripts/smoke-test.sh check #5, etc.) was historically the bom-region static egress IP but is no longer accurate. The actual current egress IPs (from `flyctl ips list -a kite-mcp-server`) are: an IPv6 + shared `66.241.125.151`. **No patch needed for code** — server.json's `deployment.egressIp` is a metadata-only field consumed by no production code path; the value is informational. The "stale-sweep" research falsified the premise that an active fix was required.
+
+**Implication**: any future SEBI-mandate-IP-whitelist discussion must re-probe `flyctl ips list -a kite-mcp-server` for the current value, NOT cite the docs-embedded `209.71.68.157`. The IP is empirically a moving target that flyctl assigns; docs should reference how to query it, not embed a literal.
+
+### 5.8 Dependency-state ladder (2026-05-16 — code we own vs algo2go)
+
+**Finding** (per `algo2go-dependency-state-2026-05-11.md` + `path-to-100-percent-algo2go-2026-05-11.md`):
+
+| State | Code in algo2go | Code in kite-mcp-server in-tree | Verdict |
+|---|---|---|---|
+| Today (master `6e72014`) | 46% (46,405 LOC across 28 algo2go modules) | 54% (54,504 LOC in kc/+app/+mcp/+plugins/+testutil/) | NOT fully algo2go |
+| Post-Sprint-0 merge | 99.3% (100,248 LOC across 28 domain modules + bootstrap) | 0.7% (710 LOC deploy-thin-shell) | NEARLY YES |
+| Post-org-transfer (`Sundeepg98 → algo2go`) | 99.3% | 0.7% | YES (every repo under algo2go org) |
+| Post-decomposition (kc.Manager dissolved into 33 algo2go modules) | 99.3% | 0.7% (irreducible deploy floor) | FULL YES |
+
+**Empirical methodology**: `go list -m all` + `wc -l` per repo; `gh api orgs/algo2go/repos` for org inventory; `flyctl status -a kite-mcp-server` for Fly GitHub-coupling check. NOT inherited from prior synthesis.
+
+**Critical asterisk**: the MCP Registry name `io.github.Sundeepg98/kite-mcp-server` is permanently locked (registry primary-key immutability rule). Even post-transfer, the registry entry retains the legacy name; only `repository.url` updates. Cosmetic only — doesn't affect functionality.
+
+### 5.9 Option B refactor (Manager accessor drain) — pattern is proven
+
+**Finding** (per `option-b-expose-properties-2026-05-11.md`, commit `2b57212`): Anchor 6 PRs 6.1-6.14 already drained 7 accessor methods via the exact "expose unexported field + delete getter" pattern (commits `5514fa3`, `629413b`, `e4f31ff`, `5e98596`, `4d6c69d`, `8b282ff`, `62599d7`). All 7 shipped green; tool count invariant at 111; no rollback events. The remaining 8 unexported-field accessors (CommandBus, QueryBus, SessionManager, ManagedSessionSvc, SessionSigner, MCPServer, UpdateSessionSignerExpiry, SetMCPServer) are amenable to the same pattern, sequenced into 5 risk-tiered PRs over ~6-9h agent-time. Recommendation: GO FULL Option B.
+
+**Empirical call-site counts** (live grep on bootstrap HEAD `f4e2215`): CommandBus 77 non-test, QueryBus 74, SessionManager 7, ManagedSessionSvc 0, SessionSigner 1, MCPServer 14, UpdateSessionSignerExpiry 0, SetMCPServer 1. 87% of accessor traffic is CommandBus/QueryBus alone (capstone PR B5).
+
 ---
 
 ## §6 — Active cross-references (the 13 docs that REMAIN authoritative)
 
 Listed by domain. Each entry has a 1-line role description.
 
-**Structural note (2026-05-11)**: `.research/` was split into subdirs to make doc-class explicit (per `.research/maintenance-strategy/value-framework.md` Class A-G + 3-tier model + corpus-maintenance synthesis at `.research/CORPUS-MAINTENANCE-STRATEGY.md`):
+**Structural note (refreshed 2026-05-16)**: `.research/` was split into subdirs to make doc-class explicit (per `.research/maintenance-strategy/value-framework.md` Class A-G + 3-tier model + corpus-maintenance synthesis at `.research/CORPUS-MAINTENANCE-STRATEGY.md`):
 
 - `.research/` (root) = **active Tier 1 Live** (STATE.md, INDEX.md, agent-domain-map.md) + **Class C/F synthesis still mid-flight** (forward-tracks, launch-path, 10000-agent, runbooks)
 - `.research/decisions/` (5 files) = **Class B Decision Records** — write-once captures of WHY a path was chosen; never edited in-place; newer-version supersedes
 - `.research/audits/<YYYY-MM-DD>/` (7 files at `2026-05-11/`) = **Class G Ephemera** — point-in-time verification reports; auto-archive after 30 days OR after newer audit-cycle of same scope
+- `.research/research/` (**NEW** as of 2026-05-11; **25 files** as of 2026-05-16) = **Class C/F research dispatches** — topic-keyed analyses (decomposition blockers, dependency-state, GitHub transfer mechanics, end-state architecture, god-object inventory, etc.). Each file is single-author, single-topic, dated. See §6.3 below.
 - `.research/maintenance-strategy/` (4 files) = corpus-governance docs (value-framework, maintenance-model, doc-classification, CORPUS-MAINTENANCE-STRATEGY)
 - `.research/archive/<topic>/` = historical reference (preserved for git archaeology only)
+
+### 6.3 `.research/research/` corpus — 25 dispatches (NEW section 2026-05-16)
+
+Topic-keyed research outputs from the 2026-05-11 multi-agent dispatch arc + 2026-05-16 follow-ups. All dated `2026-05-11` (synthesis day) or `2026-05-16` (Sprint 0 day). Listed alphabetically:
+
+| File | Topic | Authoritative for | Date |
+|---|---|---|---|
+| `algo2go-dependency-state-2026-05-11.md` | Empirical % code-we-own vs algo2go | "Are we fully on algo2go?" question + 46%/99.3%/100% ladder | 2026-05-11 |
+| `algo2go-umbrella-rebrand-strategy-2026-05-11.md` | Brand/market positioning angle | algo2go umbrella vs single-product framing | 2026-05-11 |
+| `architecture-integration-audit-2026-05-11.md` | 7 cross-module flows audit; ALL GREEN | Integration test gap inventory | 2026-05-11 |
+| `cloudflare-bitwarden-install-plan-2026-05-11.md` | Cloudflare Code Mode + Bitwarden MCP install plan | MCP ecosystem expansion roadmap | 2026-05-11 |
+| `day-1-launch-ops-2026-05-11.md` | Show-HN day operations refresh | Day-1 runbook (fly MCP + dr-decrypt-probe + H1 deltas) | 2026-05-11 |
+| `decomposition-blockers-comprehensive-2026-05-11.md` | 10 categories of decomposition blockers; 145-288h Tier-1+2 estimate | Path Y substantive decomposition roadmap | 2026-05-11 |
+| `e2e-ui-completeness-audit-2026-05-11.md` | 12/12 Playwright specs pass against prod v1.3.0 | E2E UI coverage state | 2026-05-11 |
+| `egress-ip-stale-sweep-2026-05-11.md` | 209.71.68.157 premise FALSIFIED | No patch needed for IP-in-docs; query flyctl instead | 2026-05-11 |
+| `end-state-architecture-2026-05-11.md` | Meta-synthesis of Path A + Audit + Chain reports | Where the codebase is converging | 2026-05-11 |
+| `floss-fund-rainmatter-readiness-2026-05-11.md` | FLOSS/fund + Rainmatter readiness check | Funding pathway readiness | 2026-05-11 |
+| `flyctl-friction-and-playwright-capabilities.md` | flyctl friction inventory + Playwright MCP capabilities | Tooling state | 2026-05-11 |
+| `github-transfer-bootstrap-2026-05-11.md` | GitHub transfer mechanics + bootstrap module design | Sprint 0 design spec | 2026-05-11 |
+| `god-object-inventory-2026-05-11.md` | 10-step decomposition roadmap; Manager 63-fields → ≤10 | Path Y per-slice work items | 2026-05-11 |
+| `gtm-launch-sequence-2026-05-11.md` | GTM launch sequence refresh against 58dc369 baseline | Pre-launch sequence | 2026-05-11 |
+| `launch-readiness-verdict-2026-05-11.md` | CONDITIONAL GO verdict | Launch-readiness gate | 2026-05-11 |
+| `mcp-ecosystem-audit-2026-05-11.md` | MCP ecosystem audit + prioritized install/build queue (Track 3) | MCP ecosystem state | 2026-05-11 |
+| `option-b-expose-properties-2026-05-11.md` | Option B refactor design — expose unexported Manager fields | Manager accessor drain plan (5 PRs, 6-9h) | 2026-05-11 |
+| `path-to-100-percent-algo2go-2026-05-11.md` | Residual analysis + transfer mechanics for literal 100% algo2go | Path-to-100%-algo2go playbook | 2026-05-11 |
+| `playwright-empirical-drill-2026-05-11.md` | storageState/TOTP/sudo-mode confirmed | Playwright MCP confirmation | 2026-05-11 |
+| `pre-launch-ux-audit-2026-05-11.md` | First-5-min UX audit refresh | UX state pre-launch | 2026-05-11 |
+| `sebi-shared-vs-dedicated-ip-2026-05-11.md` | SEBI April 2026 mandate deep-dive | Shared vs dedicated IPv4 analysis | 2026-05-11 |
+| `showhn-redteam-2026-05-11.md` | Show HN re-red-team — 30 archetypes + CRITICAL leaked-secrets finding | Show HN attack-surface inventory | 2026-05-11 |
+| `test-coverage-audit-2026-05-11.md` | 32 modules empirically measured | Test coverage state | 2026-05-11 |
+| `twitter-build-in-public-finalized-2026-05-11.md` | Weeks 1-4 finalized — supersedes 2026-05-02 plan | Twitter cadence plan | 2026-05-11 |
+| `zerodha-compliance-email-2026-05-11.md` | Refresh draft + AT-T-1h send-timing recommendation | Compliance comms timing | 2026-05-11 |
 
 ### Strategic / state docs (4)
 
