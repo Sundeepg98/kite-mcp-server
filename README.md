@@ -16,10 +16,10 @@ Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor,
 
 ## Why trust this
 
-- **~9,000 tests** across 437 test files — run `go test ./... -count=1`
-- **Security audit**: 27-pass manual analysis, 181 findings, all resolved — see [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) and [SECURITY_PENTEST_RESULTS.md](SECURITY_PENTEST_RESULTS.md)
+- **~9,000 tests** across 493 test files (44 in deploy repo + 449 in 32 externalized `algo2go/kite-mcp-*` modules) — run `go test ./... -count=1` in each module
+- **Security audit**: 27-pass manual analysis, 181 findings catalogued — **6 HIGH all FIXED**; MEDIUM/LOW/INFO triage in progress (74 FIXED / 107 OPEN as of 2026-05-16). See [SECURITY_AUDIT_FINDINGS.md](SECURITY_AUDIT_FINDINGS.md) for the line-item status table, [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) for the original audit narrative, and [SECURITY_PENTEST_RESULTS.md](SECURITY_PENTEST_RESULTS.md) for pentest evidence.
 - **AES-256-GCM encryption** at rest for every sensitive value — Kite tokens, API secrets, OAuth client secrets — key derived via HKDF from `OAUTH_JWT_SECRET`
-- **RiskGuard** (11 pre-trade checks) — per-order value cap (Rs 50,000 default), quantity limit, daily order count (20/day), rate limit (10/min), per-second rate limit, duplicate detection (30s window), daily cumulative value cap (Rs 2,00,000), idempotency dedup, confirmation required, anomaly μ+3σ, off-hours block — plus kill switch + circuit breaker + global freeze layers. Last verified 2026-05-11 against `algo2go/kite-mcp-riskguard/guard.go`.
+- **RiskGuard** (11 pre-trade checks) — per-order value cap (Rs 50,000 default), quantity limit, daily order count (20/day), rate limit (10/min), per-second rate limit, duplicate detection (30s window), daily cumulative value cap (Rs 2,00,000), idempotency dedup, confirmation required, anomaly μ+3σ, off-hours block — plus kill switch + circuit breaker + global freeze layers + OTR-band + margin-sufficiency boundary checks. Last verified 2026-05-16 against `algo2go/kite-mcp-riskguard/guard.go` (16 RejectionReason constants total; 11 fire on every trade).
 - **Per-tool-call audit trail** with 90-day retention — every MCP call logged to SQLite, CSV/JSON export via dashboard
 - **CI on every push** — `go build`, `go vet`, `go test -race` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml))
 - **MIT license, open source** — inspect anything. Upstream attribution to Zerodha Tech preserved in [LICENSE](LICENSE)
