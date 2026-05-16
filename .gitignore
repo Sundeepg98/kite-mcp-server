@@ -109,6 +109,28 @@ tmp/
 /kite-mcp-server
 /kite-mcp-test*
 
+# Root-level WSL2-built CLI binaries — `go test` and `go build` in WSL produce
+# ELF binaries here from cmd/ subdirs. Sources are tracked in cmd/{name}/;
+# the built artifacts at repo root are throwaway.
+/dr-decrypt-probe
+/event-graph
+/rotate-key
+
+# Coverage outputs anywhere in .research/ — these accumulate from go-test
+# coverage runs and are transient (not the canonical codecov reports).
+.research/*.cov
+
+# Ad-hoc commit-message draft files — produced as scratch by past dispatch
+# work; each was used once via `git commit -F <file>` then orphaned. The
+# committed content lives in the commit messages themselves; these scratch
+# copies are duplicates.
+.research/_*.txt
+.research/*-msg.txt
+.research/*_msg.txt
+
+# Scratch / one-off experiments in .claude/ that aren't config
+.claude/tst.js
+
 # Root-level scratch notes and test dumps (not the canonical docs — those live in .research/ or docs/)
 /admin.md
 /api.md
