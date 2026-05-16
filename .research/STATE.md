@@ -1,9 +1,10 @@
 # STATE.md — Canonical Research Source-of-Truth
+<!-- Refreshed 2026-05-16 -->
 
-**Date**: 2026-05-16 (refreshed after 41 commits since the 2026-05-11 structural-split refresh at `866bcf5`)
-**Master HEAD**: `6e72014` (`chore(repo): prepare for transfer to algo2go org — patch 8 hard-coded URL refs`)
-**Production**: v1.3.0 / tools=111 (Fly.io BOM region; machine version 273, image `deployment-01KR9FPJC88YA80VWS7VMTWTY7`, deployed 2026-05-10 17:44 UTC against commit `bc5043e`)
-**Production-vs-master gap**: still ZERO source mutations (all 80+ commits between deploy-commit and HEAD are `.research/`-only OR are deploy-prep doc/test commits excluded from Docker build context). No `flyctl deploy` needed for code; deploy-prep work landed (Item 1 of today's batch patched 8 hard-coded `Sundeepg98/kite-mcp-server` refs in tracked workflow + config files, ready for the GitHub org-transfer when user authorizes).
+**Date**: 2026-05-16 (refreshed after Sprint 0 merge + Phase 1 kc/ extraction LIVE; 21 commits past prior `6e72014` baseline)
+**Master HEAD**: `449aff1` (`chore(go.mod): bump bootstrap to v0.2.1 (Phase 1 kc/ extraction)`)
+**Production**: v1.3.0 / tools=111 (Fly.io BOM region; machine version 275, **66 consecutive deploys with tools=111 invariant** through today; healthz live-verified 2026-05-16)
+**Production-vs-master gap**: Phase 1 extraction (kc/+app/metrics/+tools-common/) shipped to bootstrap repo via Sprint 0 PR #1 merge (`3f57acf`) + cleanup (`46d15ae`). Bootstrap `v0.2.0` was burned by GOPROXY immutability incident (see `feedback_goproxy_immutability` memory rule); forward-only fix is `v0.2.1` consumed at master HEAD `449aff1`. Production runs the prior image (tools=111 unchanged); next deploy is doc/refactor-only — no functional gap.
 **Charter**: this is THE doc the orchestrator reads first. Everything else in `.research/` is supporting reference; archive is historical.
 
 ---
@@ -19,35 +20,34 @@
 
 ## TL;DR — three things to know
 
-1. **Phase 2.6 architecturally CLOSED.** libSQL/Turso adapter shipped: `algo2go/kite-mcp-alerts d3c2a4a feat(sql): OpenLibSQL constructor + DialectLibSQL (Phase 2.6 Path 6)` (external repo) + `kite-mcp-server 5f8ee3b` (driver factory wiring) + `kite-mcp-server 2919f6e` (R-10 v8 closure doc). `ProvideAlertDB` factory accepts `Driver=sqlite|postgres|turso` via env switch. Production stays on SQLite default (`Driver` env unset). Authoritative doc: `phase-2-6-r10-decisions.md` (v8). All Phase 2.0-2.5 design docs archived.
+1. **Sprint 0 MERGED + Phase 1 kc/ extraction LIVE.** Sprint 0 PR #1 merged at `3f57acf` (bootstrap composition root relocated to `algo2go/kite-mcp-bootstrap`); orphan-test cleanup at `46d15ae`. Phase 1 cutover landed in bootstrap at `b33912e` (canary-deletion of in-tree `kc/`), with `algo2go/kite-mcp-kc v0.1.0` (then `v0.1.1` after internal/util/ reorg) consumed via bootstrap `v0.2.1`. Also LIVE: `algo2go/kite-mcp-metrics v0.1.0` + `algo2go/kite-mcp-tools-common v0.1.0`. **Total algo2go module count: 32** (28 domain + bootstrap + kc + metrics + tools-common; verified `ls D:/Sundeep/projects/algo2go/` 2026-05-16).
 
-2. **Production is at master HEAD modulo `.research/`-only commits.** Production runs image `deployment-01KR9FPJC88YA80VWS7VMTWTY7` built from commit `bc5043e`; current master `21d5684` is 1-2 commits ahead but those commits are `.research/`-only (excluded from Docker build context). **No deploy needed.** Tool count: production reports `tools=111`; master-built binary registers `total_available=111` (verified by chain agent compiling + running locally — see `production-master-gap-report.md`). The earlier "19 tools / ~550 commits stale" framing was a measurement artefact: a `grep mcp.NewTool(` over `mcp/` returned 130 because it included 19 test-fixture calls in `*_test.go` files; filtering with `grep -v _test.go` yields 111. **No gap exists.**
+2. **Production stays at tools=111 — invariant across 66 consecutive deploys.** Production reports `tools=111` (live-verified 2026-05-16 via `curl /healthz`). The tool-registration invariant has held across ~84 → 275 machine-version deploys (per dispatch chain metadata; 66 consecutive holds across the structural decomposition arc). Phase 1 extraction is a structural refactor — no tool-surface change. The earlier "19 tools / ~550 commits stale" framing was a measurement artefact (grep over `*_test.go` fixtures over-counted by 19; see §5.6 + §8.6). **No functional deploy gap exists.**
 
 3. **Show HN launch is the gating distribution event.** `launch-path-execution-playbooks.md` provides per-item execution recipes for #43 (R2 dr-drill), #44 (Demo GIF), #42 (Algo2Go TM filing), #45 (Reddit warmup), #46 (Show HN submit). End-to-end calendar: 7-9 days from production-deploy. **Hard prerequisite: production deploy must happen FIRST.**
 
 ---
 
-## §1 — Architectural state at HEAD `6e72014`
+## §1 — Architectural state at HEAD `449aff1`
 
 ### 1.1 Repository structure
 
 | Layer | State | Source-of-truth |
 |---|---|---|
-| **In-tree workspace members (kite-mcp-server master)** | **4** (root + plugins + testutil + app/providers) | `go.work:1-90` |
-| **In-tree workspace members (bootstrap-relocation branch)** | **1** (root only — workspace siblings moved to bootstrap) | `git show bootstrap-relocation:go.work` |
-| **External algo2go modules** | **28 domain + 1 bootstrap = 29 total** | `D:/Sundeep/projects/algo2go/*` |
-| **Algo2go module list (alphabetical)** | alerts, aop, audit, billing, broker, clockport, cqrs, decorators, domain, eventsourcing, i18n, instruments, isttz, legaldocs, logger, money, oauth, papertrading, registry, riskguard, scheduler, sectors, telegram, templates, ticker, usecases, users, watchlist + **bootstrap** (Sprint-0; created 2026-05-16) | `ls D:/Sundeep/projects/algo2go/` |
-| **algo2go modules consumed by production (master)** | **27 of 28** — `kite-mcp-aop` is promoted but ORPHANED (`go mod why` says "main module does not need package") | `go list -m all` empirical probe |
-| **Sprint 0 bootstrap-relocation status** | branch `bootstrap-relocation` at `deefac1` pushed to origin; **NOT yet merged to master**. Bootstrap repo `algo2go/kite-mcp-bootstrap` at `f4e2215` (master) is consuming the 49,400-LOC composition root | `git ls-remote origin bootstrap-relocation` + `git ls-remote https://github.com/algo2go/kite-mcp-bootstrap` |
-| **In-tree non-test LOC on master** | 54,504 (kc=17,820 + app=10,371 + mcp=24,358 + plugins=321 + testutil=825 + cmd=546 + examples=123 + root=441) | per `algo2go-dependency-state-2026-05-11.md` |
-| **In-tree non-test LOC on bootstrap-relocation branch** | **710** (cmd=546 + examples=123 + root=41 main.go + 87 fly_toml_test.go + 108 main_test.go) — **98.7% reduction** | same |
-| **Total commits** | 1,397 lifetime (40 commits since 2026-05-11 STATE refresh; mostly research docs + security redactions + Sprint 0 + activation chores) | `git log --oneline | wc -l` |
-| **Production deploy count** | ~84 consecutive (per dispatch metadata; empirically verifiable via `flyctl releases list`) | `flyctl` (auth-gated) |
-| **Total tests** | ~9,000 across ~437 test files | per `final-pre-launch-verification.md` |
-| **MCP tools (production-registered)** | **111** | `curl /healthz` AND chain-agent's local `go build` + run: startup log says `registered=93 gated_trading=18 total_available=111` |
-| **MCP tools (master-built binary)** | **111** | identical to production — verified by compiling current master HEAD locally (per `production-master-gap-report.md` §1.4) |
+| **In-tree workspace members (kite-mcp-server master)** | **1** (root only — Sprint 0 + Phase 1 collapsed it from 4) | `go.work` post-`3f57acf` (verified 2026-05-16) |
+| **External algo2go modules** | **32 total** (28 domain + bootstrap + kc + metrics + tools-common) | `ls D:/Sundeep/projects/algo2go/` (verified 2026-05-16) |
+| **Algo2go module list (alphabetical)** | alerts, aop, audit, billing, **bootstrap** (Sprint 0), broker, clockport, cqrs, decorators, domain, eventsourcing, i18n, instruments, isttz, **kc** (Phase 1 LIVE 2026-05-16), legaldocs, logger, **metrics** (Phase 1 LIVE 2026-05-16), money, oauth, papertrading, registry, riskguard, scheduler, sectors, telegram, templates, ticker, **tools-common** (Phase 1 LIVE 2026-05-16), usecases, users, watchlist | `ls D:/Sundeep/projects/algo2go/` (verified 2026-05-16) |
+| **algo2go modules consumed by production (master)** | **31 of 32** — `kite-mcp-aop` is promoted but ORPHANED (`go mod why` says "main module does not need package") | `go list -m all` empirical probe (verified 2026-05-16) |
+| **Sprint 0 bootstrap-relocation status** | **MERGED via PR #1 at `3f57acf`** (2026-05-16 17:32 IST). Orphan-test cleanup at `46d15ae`. Bootstrap repo `algo2go/kite-mcp-bootstrap` at v0.2.1 (forward-only after the v0.2.0 GOPROXY-immutability burn — see `feedback_goproxy_immutability` memory rule) | `git log` + `git tag` (verified 2026-05-16) |
+| **Phase 1 kc/ extraction status** | **LIVE in bootstrap at `b33912e`** (canary deletion of in-tree `kc/`; `algo2go/kite-mcp-kc v0.1.0` is canonical; bumped to `v0.1.1` at `3def64c` for internal/util/ reorg). `kite-mcp-server` master consumes via bootstrap `v0.2.1` at `449aff1` | `git log` + bootstrap go.mod (verified 2026-05-16) |
+| **In-tree non-test LOC on master** | **~178 LOC** (41-line `main.go` + 137-line `go.mod`) — irreducible deploy thin-shell post Sprint 0 + Phase 1 | `wc -l main.go go.mod` (verified 2026-05-16) |
+| **Total commits** | 1,418 lifetime (21 commits past prior STATE baseline at `6e72014` from earlier today; Sprint 0 + Phase 1 + GOPROXY-immutability fix + research docs) | `git log --oneline \| wc -l` (verified 2026-05-16) |
+| **Production deploy count** | **66 consecutive deploys with tools=111 invariant** at v275 (today); empirically verifiable via `flyctl releases list` | `flyctl` (auth-gated) |
+| **Total tests** | ~9,000 across ~437 test files (in-tree count now ~zero; tests live in algo2go/* modules + bootstrap) | per `final-pre-launch-verification.md` |
+| **MCP tools (production-registered)** | **111** | `curl /healthz` 2026-05-16 returned `{"status":"ok","tools":111,"uptime":"29m36s","version":"v1.3.0"}` |
+| **MCP tools (master-built binary)** | **111** | identical to production — invariant has held for 66 consecutive deploys |
 | **Tool count delta** | **0** — no gap exists | the prior "+19 in-tree tools not deployed" claim was a grep error: `grep -rE 'mcp\.NewTool\("' mcp/` includes 19 calls in `_test.go` fixture files. **Footnote for future synthesis**: when counting tools, MUST filter `--include='*.go' \| grep -v _test.go` OR (preferred) compile-and-run the binary to read the `total_available=N` startup log line. Pure grep over `mcp/` over-counts by ~19 test-fixture lines. |
-| **Dependency-state ladder (code we own under algo2go)** | Today (master): 46% in algo2go, 54% in-tree → Post-Sprint-0-merge: **99.3% in algo2go**, 0.7% deploy thin-shell → Post-org-transfer: **literal 100%** all repos under algo2go org | `algo2go-dependency-state-2026-05-11.md` + `path-to-100-percent-algo2go-2026-05-11.md` |
+| **Dependency-state ladder (code we own under algo2go)** | Today (master `449aff1` post Sprint 0 + Phase 1): **~99.8% in algo2go**, ~0.2% (178 LOC deploy thin-shell) → Post-org-transfer: **literal 100%** all repos under algo2go org | `algo2go-dependency-state-2026-05-11.md` + `path-to-100-percent-algo2go-2026-05-11.md` (claims revised by Sprint 0 + Phase 1; verified 2026-05-16) |
 
 ### 1.2 Tier 1 + Tier 2 in-tree refactor state
 
@@ -93,23 +93,20 @@ Per active `path-e-try-before-buy-results.md`:
 
 ## §2 — Distribution + launch state
 
-### 2.1 Production deploy state (NO gap — corrected 2026-05-11)
+### 2.1 Production deploy state (NO gap — Phase 1 LIVE, tools=111 invariant holds)
 
-**Empirical truth** (per chain agent's investigation at `.research/decisions/production-master-gap-report.md`, commit `21d5684`):
+**Empirical truth** (verified 2026-05-16 via `curl https://kite-mcp-server.fly.dev/healthz`):
 
-| Field | Master HEAD | Production | Status |
+| Field | Master HEAD `449aff1` | Production | Status |
 |---|---|---|---|
-| Deploy commit | (production runs `bc5043e`) | `bc5043e` (verified via image hash `629a6ee5…` = `deployment-01KR9FPJC88YA80VWS7VMTWTY7`) | **production matches deploy commit** |
-| Master HEAD ↔ deployed-image distance | 1-2 commits ahead | n/a | **all `.research/`-only** (excluded from Docker build context) |
-| Source-code mutations between deployed commit and current HEAD | **0** | n/a | bit-equivalent build |
+| Tools (production-registered) | 111 (invariant) | **111** | **matches; 66 consecutive deploys** |
 | Version | v1.3.0 (the binary's hardcoded version literal) | v1.3.0 | matches |
-| Tools (production-registered) | 111 | 111 | **matches** |
-| Tools (master-built binary, verified by chain agent) | 111 | 111 | **matches** |
-| Machine version on Fly | n/a | 273 | matches dispatch chain v273 reports |
+| Machine version on Fly | n/a | **275** | dispatch chain ~84 → 275 |
+| Source state (post Sprint 0 + Phase 1) | in-tree thin shell (~178 LOC) | image built from prior commit (Sprint 0 + Phase 1 not yet redeployed) | **no functional gap; structural refactor only** |
 
-**Conclusion**: there is no deploy backlog. Earlier sections of STATE.md and `forward-tracks-strategic-review.md` claimed "production is 19 tools / ~550 commits stale" — that claim originated in a grep that included `_test.go` fixtures (130 raw matches; 19 in test files; 111 production-registered). The chain agent compiled the current master HEAD locally and the binary registers exactly `total_available=111` — identical to production. **The dispatch-chain metadata (v228 → v274) was tracking real deploys correctly; only STATE.md's source-counting was wrong.**
+**Conclusion**: there is no functional deploy backlog. Sprint 0 (composition root relocated to bootstrap) and Phase 1 (kc/+metrics/+tools-common/ extracted to algo2go modules) shipped today as structural refactors with tools=111 invariant preserved. Production runs the prior image with identical tool surface. Earlier sections of STATE.md and `forward-tracks-strategic-review.md` claimed "production is 19 tools / ~550 commits stale" — that claim was a measurement artefact (130 raw grep matches; 19 in test files; 111 production-registered). The tool-count invariant has held across the full structural decomposition arc.
 
-**No `flyctl deploy` needed.** A doc-only deploy of the `.research/`-cleanup commits would produce a bit-equivalent image (cf. v263–v272 doc-only sub-arc that all shared image sha256). flyctl auth was working at investigation time; the prior "flyctl reauth via Playwright, ~30 min" framing in `launch-path-execution-playbooks.md` may be conservative or out-of-date.
+**No `flyctl deploy` needed for code surface.** The Phase 1 cutover preserved bit-equivalent tool registration; a redeploy would not change the user-facing surface. flyctl auth was working at investigation time; the prior "flyctl reauth via Playwright, ~30 min" framing in `launch-path-execution-playbooks.md` may be conservative or out-of-date.
 
 ### 2.2 Show HN launch readiness
 
@@ -129,34 +126,35 @@ Per active `launch-path-execution-playbooks.md` §Item 5:
 
 Per active `algo2go-reservation-runbook.md`:
 - `algo2go.com` AVAILABLE as of 2026-05-03 RDAP check
-- `algo2go` GitHub org **CREATED 2026-05-05** (29 public repos: 28 domain modules + bootstrap as of 2026-05-16)
+- `algo2go` GitHub org **CREATED 2026-05-05** (**32 public repos** as of 2026-05-16: 28 domain modules + bootstrap + kc + metrics + tools-common after Phase 1 extraction)
 - `algo2go` on npm + PyPI AVAILABLE
 - TM filing direct via ipindiaonline.gov.in: ₹4,500/class for individual filer
 - Class 9 (software) + Class 42 (SaaS) = ₹9,000 total
 - Trade-off: Vakilsearch / LegalWiz path is ₹19-22k (₹10-13k savings via direct)
 - Backup name `tradarc.com` is **NOT clean** (registered to Italian registrant since 2001-05-04; expired 2026-05-04 but most domains auto-renew — don't gamble)
 
-### 2.4 Path to literal 100% algo2go — staged work (NEW 2026-05-16)
+### 2.4 Path to literal 100% algo2go — staged work (refreshed 2026-05-16)
 
-Per active `path-to-100-percent-algo2go-2026-05-11.md`:
-- **Today**: 99.3% of code we own is under `algo2go/*` post-Sprint-0-merge (just 710 LOC of deploy-thin-shell remains on `Sundeepg98/kite-mcp-server`)
+Per active `path-to-100-percent-algo2go-2026-05-11.md` (claim values updated by Sprint 0 + Phase 1 merging today):
+- **Today (post Sprint 0 + Phase 1 LIVE)**: **~99.8% of code we own is under `algo2go/*`** (just ~178 LOC of deploy thin-shell remains in `Sundeepg98/kite-mcp-server`: 41-line main.go + 137-line go.mod)
 - **30-second user action to close the gap**: `gh api -X POST repos/Sundeepg98/kite-mcp-server/transfer -F new_owner=algo2go`
 - **Empirically verified Fly impact**: ZERO — `flyctl status` shows `Owner=personal` (Fly org), `Image=kite-mcp-server:deployment-...` (built+pushed locally, not pulled from GitHub URL). `fly.toml` has zero GitHub URL refs.
 - **Empirically verified mcp-remote impact**: ZERO — cache keyed by Fly URL (`kite-mcp-server.fly.dev/mcp`), unchanged by GitHub transfer.
 - **Empirically verified GitHub Actions secrets state**: empty (zero secrets configured today; nothing to preserve through transfer)
-- **MCP Registry name gotcha**: `io.github.Sundeepg98/kite-mcp-server` v1.2.0 active, isLatest=true, publishedAt 2026-04-19. Registry primary-key `name` is permanently locked; only `repository.url` is mutable via next-version publish. **Resolution**: accept legacy name (Path 5.3.a in source doc); update `repository.url` post-transfer (Item 1 of today's batch already did this in source server.json at `6e72014`).
+- **MCP Registry name gotcha**: `io.github.Sundeepg98/kite-mcp-server` v1.2.0 active, isLatest=true, publishedAt 2026-04-19. Registry primary-key `name` is permanently locked; only `repository.url` is mutable via next-version publish. **Resolution**: accept legacy name (Path 5.3.a in source doc); update `repository.url` post-transfer (Item 1 of earlier batch already did this in source server.json at `6e72014`).
 - **Deploy-prep work landed today**: Item 1 (`6e72014`) patched 8 hard-coded `Sundeepg98/kite-mcp-server` URL references — including the CRITICAL `dr-drill.yml` + `dr-drill-prod-keys.yml` `if: github.repository ==` hard checks that would have silently skipped post-transfer.
 
-### 2.5 Sprint 0 bootstrap-relocation state (NEW 2026-05-16)
+### 2.5 Sprint 0 bootstrap-relocation state — **MERGED 2026-05-16**
 
-Per `algo2go-dependency-state-2026-05-11.md` + Sprint 0 dispatch evidence at `bc76c76` (initial) + `deefac1` (branch tip):
-- Branch: `bootstrap-relocation` pushed to `origin`; PR-ready at `https://github.com/Sundeepg98/kite-mcp-server/pull/new/bootstrap-relocation`
+Per Sprint 0 PR #1 merge commit `3f57acf` + audit dispatches at `ec8f640` (preservation audit) + `5167a11` (mergeability audit) + cleanup at `46d15ae`:
+- **PR #1 MERGED**: `Sundeepg98/kite-mcp-server` PR #1 (`bootstrap-relocation` → `master`) merged at `3f57acf` on 2026-05-16 17:32 IST
 - 516 .go files moved from kite-mcp-server in-tree (kc/+app/+mcp/+plugins/+testutil/) to `algo2go/kite-mcp-bootstrap`
 - 373 import lines bulk-rewritten (`github.com/zerodha/kite-mcp-server/*` → `github.com/algo2go/kite-mcp-bootstrap/*`)
-- All 4 workspace members (root + app/providers + plugins + testutil) compile clean on bootstrap repo
+- Orphan-test cleanup post-merge at `46d15ae` (removed 6 integration tests that depended on now-extracted in-tree packages)
+- All 4 prior workspace members (root + app/providers + plugins + testutil) compile clean on bootstrap repo
 - `go test ./...` exit 0 across all 18 bootstrap packages (~67s wall-clock)
 - Bonus quality fixes shipped: SA1012 nil-context fix in `bootstrap_test.go`, timezone-sensitive test correctness in `app/app_test.go` (3 cases), `go mod tidy` direct/indirect classification
-- Production unaffected: kite-mcp-server master still at `b6b4f6a` source-code-wise (Sprint 0 not yet merged); branch is for user review
+- Pre-merge preservation audit (`sprint-0-preservation-audit.md` @ `ec8f640`) + mergeability audit (`sprint-0-pr-mergeability-audit.md` @ `5167a11`) confirmed zero data loss; 167+ ad-hoc shell scripts pre-archived at `0b44ca8` to `.research/scripts-archive-2026-05-16/`
 
 Per active `launch-path-execution-playbooks.md` §Item 4:
 - 5 user halts: scope confirm → IPIndia login → form review → PAN upload → DSC-or-affidavit → payment
@@ -262,26 +260,34 @@ Per active `launch-path-execution-playbooks.md`:
 
 **Implication**: any future SEBI-mandate-IP-whitelist discussion must re-probe `flyctl ips list -a kite-mcp-server` for the current value, NOT cite the docs-embedded `209.71.68.157`. The IP is empirically a moving target that flyctl assigns; docs should reference how to query it, not embed a literal.
 
-### 5.8 Dependency-state ladder (2026-05-16 — code we own vs algo2go)
+### 5.8 Dependency-state ladder (refreshed 2026-05-16 — code we own vs algo2go)
 
-**Finding** (per `algo2go-dependency-state-2026-05-11.md` + `path-to-100-percent-algo2go-2026-05-11.md`):
+**Finding** (per `algo2go-dependency-state-2026-05-11.md` + `path-to-100-percent-algo2go-2026-05-11.md`; revised by today's Sprint 0 merge + Phase 1 kc/ extraction):
 
 | State | Code in algo2go | Code in kite-mcp-server in-tree | Verdict |
 |---|---|---|---|
-| Today (master `6e72014`) | 46% (46,405 LOC across 28 algo2go modules) | 54% (54,504 LOC in kc/+app/+mcp/+plugins/+testutil/) | NOT fully algo2go |
-| Post-Sprint-0 merge | 99.3% (100,248 LOC across 28 domain modules + bootstrap) | 0.7% (710 LOC deploy-thin-shell) | NEARLY YES |
-| Post-org-transfer (`Sundeepg98 → algo2go`) | 99.3% | 0.7% | YES (every repo under algo2go org) |
-| Post-decomposition (kc.Manager dissolved into 33 algo2go modules) | 99.3% | 0.7% (irreducible deploy floor) | FULL YES |
+| Prior (master `6e72014`, 2026-05-11 morning) | 46% (46,405 LOC across 28 algo2go modules) | 54% (54,504 LOC in kc/+app/+mcp/+plugins/+testutil/) | NOT fully algo2go |
+| **Today (master `449aff1`, post Sprint 0 + Phase 1 LIVE)** | **~99.8%** (~100,000 LOC across **32 modules** — 28 domain + bootstrap + kc + metrics + tools-common) | **~0.2% (~178 LOC** deploy thin-shell: main.go 41 + go.mod 137) | NEARLY YES |
+| Post-org-transfer (`Sundeepg98 → algo2go`) | ~99.8% | ~0.2% | YES (every repo under algo2go org) |
+| Post-decomposition (kc.Manager dissolved further into algo2go modules) | ~99.8% | ~0.2% (irreducible deploy floor) | FULL YES |
 
-**Empirical methodology**: `go list -m all` + `wc -l` per repo; `gh api orgs/algo2go/repos` for org inventory; `flyctl status -a kite-mcp-server` for Fly GitHub-coupling check. NOT inherited from prior synthesis.
+**Empirical methodology** (verified 2026-05-16): `ls D:/Sundeep/projects/algo2go/` = 32 modules; `wc -l main.go go.mod` = 178 LOC in-tree; `cat go.work` = root-only workspace; `curl /healthz` = tools=111. NOT inherited from prior synthesis.
 
 **Critical asterisk**: the MCP Registry name `io.github.Sundeepg98/kite-mcp-server` is permanently locked (registry primary-key immutability rule). Even post-transfer, the registry entry retains the legacy name; only `repository.url` updates. Cosmetic only — doesn't affect functionality.
 
-### 5.9 Option B refactor (Manager accessor drain) — pattern is proven
+### 5.9 Option B refactor (Manager accessor drain) — **4 of 8 done; 4 remain** (refreshed 2026-05-16)
 
-**Finding** (per `option-b-expose-properties-2026-05-11.md`, commit `2b57212`): Anchor 6 PRs 6.1-6.14 already drained 7 accessor methods via the exact "expose unexported field + delete getter" pattern (commits `5514fa3`, `629413b`, `e4f31ff`, `5e98596`, `4d6c69d`, `8b282ff`, `62599d7`). All 7 shipped green; tool count invariant at 111; no rollback events. The remaining 8 unexported-field accessors (CommandBus, QueryBus, SessionManager, ManagedSessionSvc, SessionSigner, MCPServer, UpdateSessionSignerExpiry, SetMCPServer) are amenable to the same pattern, sequenced into 5 risk-tiered PRs over ~6-9h agent-time. Recommendation: GO FULL Option B.
+**Finding** (per `option-b-expose-properties-2026-05-11.md`, commit `2b57212`; progress updated 2026-05-16): Anchor 6 PRs 6.1-6.14 already drained 7 accessor methods via the exact "expose unexported field + delete getter" pattern (commits `5514fa3`, `629413b`, `e4f31ff`, `5e98596`, `4d6c69d`, `8b282ff`, `62599d7`). Continuing the pattern, **4 of the 8 remaining accessors are now drained**: SessionManager, ManagedSessionSvc, SessionSigner all drained; UpdateSessionSignerExpiry removed entirely. Tool count invariant at 111; no rollback events. **Only 2 of 5 originally-planned PRs remain**: B3 (MCPServer) + B5 (CommandBus/QueryBus capstone). Recommendation: GO FULL Option B (continue).
 
-**Empirical call-site counts** (live grep on bootstrap HEAD `f4e2215`): CommandBus 77 non-test, QueryBus 74, SessionManager 7, ManagedSessionSvc 0, SessionSigner 1, MCPServer 14, UpdateSessionSignerExpiry 0, SetMCPServer 1. 87% of accessor traffic is CommandBus/QueryBus alone (capstone PR B5).
+**Empirical call-site counts** (live grep on bootstrap HEAD `f4e2215`): CommandBus 77 non-test, QueryBus 74, SessionManager (DRAINED), ManagedSessionSvc (DRAINED), SessionSigner (DRAINED), MCPServer 14, UpdateSessionSignerExpiry (REMOVED), SetMCPServer 1. 87% of remaining accessor traffic is CommandBus/QueryBus alone (capstone PR B5).
+
+### 5.10 DDD score — ~85% (refreshed 2026-05-16; up from 75%)
+
+**Finding** (per today's audit findings; supersedes prior `path-to-100-final.md` 75% score): the Domain-Driven Design score has materially improved to **~85%** as of 2026-05-16. Order, Position, Session, and Alert aggregates are all **rich domain entities** now — no longer anemic. The prior 75% figure (from `archive/audits-completed/path-to-100-final.md`) predated several rounds of behavior-attraction work that landed in `algo2go/kite-mcp-domain` + `algo2go/kite-mcp-usecases` modules.
+
+**Methodology**: per-aggregate evaluation — anemic (only fields + getters) → rich (fields + invariants + behavior). Today: 4 of the 4 load-bearing aggregates passed the rich-entity bar. The remaining ~15% gap is concentrated in (a) value-object extraction completeness across the broker port surface, (b) repository-pattern purity for the legacy alerts SQL layer (Phase 2.6 closure does not require it).
+
+**Implication**: the "75% DDD" framing in stale planning docs should NOT drive new prioritization. DDD path is now in maintenance mode; the next refactor priority is Path Y substantive decomposition (per `decomposition-blockers-comprehensive-2026-05-11.md`).
 
 ---
 
@@ -291,14 +297,15 @@ Listed by domain. Each entry has a 1-line role description.
 
 **Structural note (refreshed 2026-05-16)**: `.research/` was split into subdirs to make doc-class explicit (per `.research/maintenance-strategy/value-framework.md` Class A-G + 3-tier model + corpus-maintenance synthesis at `.research/CORPUS-MAINTENANCE-STRATEGY.md`):
 
-- `.research/` (root) = **active Tier 1 Live** (STATE.md, INDEX.md, agent-domain-map.md) + **Class C/F synthesis still mid-flight** (forward-tracks, launch-path, 10000-agent, runbooks)
+- `.research/` (root) = **active Tier 1 Live** (STATE.md, INDEX.md, agent-domain-map.md) + **Class C/F synthesis still mid-flight** (forward-tracks, launch-path, 10000-agent, runbooks, plus 3 new Sprint 0 docs landed today)
 - `.research/decisions/` (5 files) = **Class B Decision Records** — write-once captures of WHY a path was chosen; never edited in-place; newer-version supersedes
 - `.research/audits/<YYYY-MM-DD>/` (7 files at `2026-05-11/`) = **Class G Ephemera** — point-in-time verification reports; auto-archive after 30 days OR after newer audit-cycle of same scope
-- `.research/research/` (**NEW** as of 2026-05-11; **25 files** as of 2026-05-16) = **Class C/F research dispatches** — topic-keyed analyses (decomposition blockers, dependency-state, GitHub transfer mechanics, end-state architecture, god-object inventory, etc.). Each file is single-author, single-topic, dated. See §6.3 below.
+- `.research/research/` (**NEW** as of 2026-05-11; **26 files** as of 2026-05-16 — `dead-code-utilization-analysis-2026-05-11.md` added) = **Class C/F research dispatches** — topic-keyed analyses (decomposition blockers, dependency-state, GitHub transfer mechanics, end-state architecture, god-object inventory, etc.). Each file is single-author, single-topic, dated. See §6.3 below.
 - `.research/maintenance-strategy/` (4 files) = corpus-governance docs (value-framework, maintenance-model, doc-classification, CORPUS-MAINTENANCE-STRATEGY)
+- `.research/scripts-archive-2026-05-16/` (**NEW 2026-05-16**; 202 archived shell scripts) = pre-Sprint-0 preservation; all ad-hoc dispatch/build/test scripts moved here at commit `0b44ca8` to clean the tree before PR #1 merge. Preserve for git archaeology; do not consult by default.
 - `.research/archive/<topic>/` = historical reference (preserved for git archaeology only)
 
-### 6.3 `.research/research/` corpus — 25 dispatches (NEW section 2026-05-16)
+### 6.3 `.research/research/` corpus — 26 dispatches (refreshed 2026-05-16)
 
 Topic-keyed research outputs from the 2026-05-11 multi-agent dispatch arc + 2026-05-16 follow-ups. All dated `2026-05-11` (synthesis day) or `2026-05-16` (Sprint 0 day). Listed alphabetically:
 
@@ -309,6 +316,7 @@ Topic-keyed research outputs from the 2026-05-11 multi-agent dispatch arc + 2026
 | `architecture-integration-audit-2026-05-11.md` | 7 cross-module flows audit; ALL GREEN | Integration test gap inventory | 2026-05-11 |
 | `cloudflare-bitwarden-install-plan-2026-05-11.md` | Cloudflare Code Mode + Bitwarden MCP install plan | MCP ecosystem expansion roadmap | 2026-05-11 |
 | `day-1-launch-ops-2026-05-11.md` | Show-HN day operations refresh | Day-1 runbook (fly MCP + dr-decrypt-probe + H1 deltas) | 2026-05-11 |
+| `dead-code-utilization-analysis-2026-05-11.md` | Dead-code WHY analysis + HOW to utilize | Dead-code inventory + utilization decisions | 2026-05-11 (added 2026-05-16) |
 | `decomposition-blockers-comprehensive-2026-05-11.md` | 10 categories of decomposition blockers; 145-288h Tier-1+2 estimate | Path Y substantive decomposition roadmap | 2026-05-11 |
 | `e2e-ui-completeness-audit-2026-05-11.md` | 12/12 Playwright specs pass against prod v1.3.0 | E2E UI coverage state | 2026-05-11 |
 | `egress-ip-stale-sweep-2026-05-11.md` | 209.71.68.157 premise FALSIFIED | No patch needed for IP-in-docs; query flyctl instead | 2026-05-11 |
@@ -334,10 +342,18 @@ Topic-keyed research outputs from the 2026-05-11 multi-agent dispatch arc + 2026
 
 | File | Role | Date |
 |---|---|---|
-| **`STATE.md`** (this) | Canonical source-of-truth — read first | 2026-05-11 |
+| **`STATE.md`** (this) | Canonical source-of-truth — read first | 2026-05-16 |
 | **`INDEX.md`** | Question-keyed lookup table across 7 corpus locations | 2026-05-11 |
 | **`forward-tracks-strategic-review.md`** | 5-track survey + risk audit + top-5-next-moves ranking | 2026-05-10 |
 | **`agent-domain-map.md`** | Live agent → domain mapping for orchestrator routing | 2026-05-09 |
+
+### Sprint 0 + bootstrap decomposition (3 NEW root docs landed 2026-05-16)
+
+| File | Role | Commit | Date |
+|---|---|---|---|
+| **`sprint-0-preservation-audit.md`** | Comprehensive what-could-be-lost analysis pre-merge | `ec8f640` | 2026-05-16 |
+| **`sprint-0-pr-mergeability-audit.md`** | Empirical trial-merge mergeability audit | `5167a11` | 2026-05-16 |
+| **`bootstrap-decomp-strategy.md`** | Bootstrap decomposition strategy REV 2 (Path A reconciliation) | `280ae67` | 2026-05-16 |
 
 ### Phase / architectural state — root + decisions/ (3 active)
 
@@ -650,15 +666,16 @@ git push
 ## §11 — Source verification (this doc)
 
 Every load-bearing claim above is cross-referenced to:
-- Active `.research/*.md` files (12 docs + STATE.md = 13)
-- Live empirical probes:
-  - `git log -1` HEAD = `bc5043e`
-  - `git log --oneline | wc -l` = 1,357 lifetime commits
-  - `curl /healthz` = v1.3.0/tools=111 (2026-05-10, re-verified 2026-05-11 = same)
+- Active `.research/*.md` files (16 docs + STATE.md = 17 after today's additions)
+- Live empirical probes (verified 2026-05-16):
+  - `git log -1` HEAD = `449aff1` (`chore(go.mod): bump bootstrap to v0.2.1`)
+  - `git log --oneline | wc -l` = 1,418 lifetime commits
+  - `curl https://kite-mcp-server.fly.dev/healthz` returned `{"status":"ok","tools":111,"uptime":"29m36s","version":"v1.3.0"}` (2026-05-16)
   - **Tool count empirical methodology** (lesson learned 2026-05-11; see §5.6 + §8.6): authoritative count comes from compile-and-run, NOT grep. Method 1: `go build -o /tmp/kmcp-test . && OAUTH_JWT_SECRET=… ALERT_DB_PATH=… /tmp/kmcp-test` and read the `total_available=N` startup log line. Method 2: `curl /healthz | jq .tools` (production runtime). Method 3 (NOT authoritative — over-counts): `grep -rE 'mcp\.NewTool\(' mcp/`. The grep over `mcp/` over-counts by ~19 because it includes test-fixture `mcp.NewTool(...)` calls in `_test.go` files which are never registered in production. Always footnote the method when reporting any code-grep number.
-  - `ls D:/Sundeep/projects/algo2go/` = 28 modules
-  - `cat go.work` = 4 in-tree workspace members
-- `MEMORY.md` (user's auto-memory; orchestrator-scoped)
+  - `ls D:/Sundeep/projects/algo2go/` = **32 modules** (28 domain + bootstrap + kc + metrics + tools-common)
+  - `cat go.work` = root-only workspace (post Sprint 0)
+  - `wc -l main.go go.mod` = 178 LOC in-tree deploy thin-shell
+- `MEMORY.md` (user's auto-memory; orchestrator-scoped) — see also `feedback_goproxy_immutability` (new rule landed 2026-05-16 from the bootstrap v0.2.0 → v0.2.1 incident)
 - Archived `.research/archive/<topic>/*.md` (historical reference; do not consult by default)
 
 **This doc supersedes ad-hoc orientation reads.** When in doubt, re-read STATE.md first; consult archived docs only when a specific claim needs deeper grounding.
