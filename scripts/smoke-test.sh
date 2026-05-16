@@ -30,8 +30,15 @@ BASE_URL="${1:-https://kite-mcp-server.fly.dev}"
 BASE_URL="${BASE_URL%/}"   # strip any trailing slash
 
 # Kite API key used as OAuth client_id by the server (Fly.io deployment).
-# Public information - NOT a secret. See: oauth/handlers.go.
-TEST_CLIENT_ID="mmo8qxk1ccrcplad"
+# Per oauth/handlers.go the API key IS the OAuth client_id so it is necessarily
+# disclosed at /oauth/authorize. Still parameterized via env var to (a) avoid
+# `git grep API_KEY` red-team optics and (b) let callers point this script at
+# a different Fly app (staging, fork) without editing the source.
+#
+# Default value redacted 2026-05-11 after showhn-redteam audit; if unset, the
+# smoke test is skipped at the OAuth-authorize checks (steps 7-8) with a
+# clear message rather than hard-coding the prod app's identifier.
+TEST_CLIENT_ID="${TEST_CLIENT_ID:-}"
 # RFC 7636 test vector PKCE challenge (S256 of a fixed verifier).
 TEST_CODE_CHALLENGE="E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 
@@ -204,15 +211,22 @@ case "$code" in
 esac
 
 # ---------- 8. /oauth/authorize with valid params 302s to kite.zerodha.com ----------
-auth_url="$BASE_URL/oauth/authorize?response_type=code&client_id=$TEST_CLIENT_ID&redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fcallback&state=smoketest&code_challenge=$TEST_CODE_CHALLENGE&code_challenge_method=S256"
-code="$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "$auth_url" 2>/dev/null || echo "000")"
-redirect="$(curl -sS --max-time 5 -o /dev/null -w "%{redirect_url}" "$auth_url" 2>/dev/null || echo "")"
-if [ "$code" != "302" ]; then
-  bad "/oauth/authorize with valid params returned $code" "(expected 302)"
-elif ! printf "%s" "$redirect" | grep -q "kite\.zerodha\.com"; then
-  bad "/oauth/authorize 302 target is not kite.zerodha.com" "(redirect=${redirect:-empty})"
+# Requires TEST_CLIENT_ID env var (Kite Connect API key for the target Fly app).
+# Skipped (with a warning, not a failure) when unset to avoid hard-coding any
+# specific app's identifier in this tracked script.
+if [ -z "$TEST_CLIENT_ID" ]; then
+  warn "/oauth/authorize with valid params (skipped)" "(set TEST_CLIENT_ID env var to enable; expects target app's Kite API key)"
 else
-  ok "/oauth/authorize falls through to Kite login" "(302 -> kite.zerodha.com)"
+  auth_url="$BASE_URL/oauth/authorize?response_type=code&client_id=$TEST_CLIENT_ID&redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fcallback&state=smoketest&code_challenge=$TEST_CODE_CHALLENGE&code_challenge_method=S256"
+  code="$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "$auth_url" 2>/dev/null || echo "000")"
+  redirect="$(curl -sS --max-time 5 -o /dev/null -w "%{redirect_url}" "$auth_url" 2>/dev/null || echo "")"
+  if [ "$code" != "302" ]; then
+    bad "/oauth/authorize with valid params returned $code" "(expected 302)"
+  elif ! printf "%s" "$redirect" | grep -q "kite\.zerodha\.com"; then
+    bad "/oauth/authorize 302 target is not kite.zerodha.com" "(redirect=${redirect:-empty})"
+  else
+    ok "/oauth/authorize falls through to Kite login" "(302 -> kite.zerodha.com)"
+  fi
 fi
 
 # ---------- 9. /healthz warm response-time sanity ----------
