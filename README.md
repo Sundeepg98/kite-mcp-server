@@ -71,6 +71,10 @@ Then say: *"Log me in to Kite"* — complete the OAuth flow in your browser — 
 
 New to this? Start with paper trading: *"Enable paper trading mode"* — virtual Rs 1 crore portfolio, no real money at risk.
 
+> **Windows + Claude Code footnote**: On Windows, `cmd /c` silently swallows JSON args containing escaped quotes (`\"`). If you need to pass static OAuth client info to `mcp-remote`, write the JSON to a file and reference it via `--static-oauth-client-info @path/to/client-info.json` instead of inline. Example client-info file lives at `~/.claude/mcp-servers/kite-fly-client.json` in the canonical Windows setup.
+
+OAuth discovery follows the standards: [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) (OAuth 2.0 Authorization Server Metadata at `/.well-known/oauth-authorization-server`) and [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) (OAuth 2.0 Protected Resource Metadata at `/.well-known/oauth-protected-resource`). `mcp-remote` auto-discovers via these endpoints — no manual auth configuration required on the client side.
+
 ## Features
 
 - **Portfolio analysis** — holdings, positions, margins, P&L, sector exposure (150+ stocks mapped), tax-loss harvest, concentration, dividends
