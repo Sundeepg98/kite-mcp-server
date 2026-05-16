@@ -3,6 +3,10 @@
     "kite": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
+    },
+    "fly": {
+      "command": "C:\\Users\\Dell\\.fly\\bin\\flyctl.exe",
+      "args": ["mcp", "server"]
     }
   }
 }
