@@ -6,6 +6,14 @@ github.com/algo2go/kite-mcp-audit v0.2.0 h1:/H+V2RQ2rjRGYtCuAX4lBLlg3BodcIw8Mhce
 github.com/algo2go/kite-mcp-audit v0.2.0/go.mod h1:oQHRW5vMOHB/Dcz2FazDnF10/gbvnaA1eMXfHs4L2Pw=
 github.com/algo2go/kite-mcp-billing v0.3.0 h1:4ZrpSzQrSbmDBGAY4WHpdPJ9Vx/n3ucyHalIsJBhA/8=
 github.com/algo2go/kite-mcp-billing v0.3.0/go.mod h1:njg4ozWby+8a3dxs8CbidFobwu/LS3ZttKol05LNBJg=
+github.com/algo2go/kite-mcp-bootstrap v0.1.1 h1:b7MR2WcTckjWcVjk55l8ZKe8yI0N7p+IU7hQjpTvf18=
+github.com/algo2go/kite-mcp-bootstrap v0.1.1/go.mod h1:TEPDopjYryCfpxgVxwN/ipNdeJFhnRrlxk1s6eg3iZU=
+github.com/algo2go/kite-mcp-bootstrap/app/providers v0.1.1 h1:HowgTtzR3jxGB/BteCYY8xEJY1pixV1iYvJ2JbZQPuQ=
+github.com/algo2go/kite-mcp-bootstrap/app/providers v0.1.1/go.mod h1:+4gjcdk9JKMN8csobrb9JmKQrhEn0R4Kbysv9kV0f54=
+github.com/algo2go/kite-mcp-bootstrap/plugins v0.1.1 h1:DLZjPYjNHBr6nNsBTCiiWLXfVJkijW2M7pTKq6YK4kw=
+github.com/algo2go/kite-mcp-bootstrap/plugins v0.1.1/go.mod h1:vtmNDQ2cjLyks4EGwVTje1bTd9+EvsHt43bAHK6xroM=
+github.com/algo2go/kite-mcp-bootstrap/testutil v0.1.1 h1:sN7xuSl6alHcYB8oLWWfKNci04vSGPmbSmMC5n19fCU=
+github.com/algo2go/kite-mcp-bootstrap/testutil v0.1.1/go.mod h1:CXImqPxrfkUrU1qAdrJOfa0yIx9gARmcOdBzGTkSnJc=
 github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=
 github.com/algo2go/kite-mcp-broker v0.1.0/go.mod h1:96SPH/3bGKE/PGZPC04LUeY5czpd7WCLC5fzXRG/Qhc=
 github.com/algo2go/kite-mcp-clockport v0.1.0 h1:Nk9252LVo0j0xqAOCK3kNs1puj5u83Z7U6IBk2CQjwo=
@@ -28,6 +36,8 @@ github.com/algo2go/kite-mcp-legaldocs v0.1.0 h1:9fw+JkpEW050KMFWj/JKCANZL9UTgY0K
 github.com/algo2go/kite-mcp-legaldocs v0.1.0/go.mod h1:CJwnq9dgEnjLXL7V3x27VoztESE3ImZN54TCi9eSqxg=
 github.com/algo2go/kite-mcp-logger v0.1.0 h1:A+i9vnM43sZn5Y2wEz3TAks32YKCvyob1HXDyUUuTuk=
 github.com/algo2go/kite-mcp-logger v0.1.0/go.mod h1:Ffsc4kAetI15Z0QNHme9hxl28zjQI6AOWF5f3S1yJzk=
+github.com/algo2go/kite-mcp-metrics v0.1.0 h1:StSpiTIjWno0gI+UkDz063d/UTs85tyyYwbmjnskiCE=
+github.com/algo2go/kite-mcp-metrics v0.1.0/go.mod h1:yWZSIx5+D5ZvldZiI4s2+Agg4dtV1tnd0TfRcwXw+L8=
 github.com/algo2go/kite-mcp-money v0.1.0 h1:4+HEW6r0/N7h+5jsjCNJZCHYwML/SkmE8/FylcfckJ8=
 github.com/algo2go/kite-mcp-money v0.1.0/go.mod h1:bjj4XnGM+YU2B8pPKTheanSVgW6ON3t0lh2d/m7ELek=
 github.com/algo2go/kite-mcp-oauth v0.1.0 h1:JpqI5MdQAYi8eJE0BaWlDDCRYA4LyQ6xxsNijcknOZI=

@@ -1,128 +1,26 @@
 package main
 
 import (
-	"log/slog"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestMemoryLimitConstant verifies the runtime memory limit is set to a
-// sane value (450 MB). Path C item per audit 6ee6520: prevents OOM-kill
-// on the 512 MB Fly.io machine by giving Go's GC a soft target below
-// kernel OOM-killer threshold.
-//
-// We assert two invariants:
-//  1. memoryLimitBytes is the documented 450 MB constant
-//  2. debug.SetMemoryLimit retrieved-via-(-1) reflects an applied limit
-//     equal to memoryLimitBytes (proves init() ran)
-//
-// The init() block itself is exercised by virtue of the test binary
-// loading the main package — every test in this file proves init ran.
-func TestMemoryLimitConstant(t *testing.T) {
-	t.Parallel()
-
-	// Invariant 1: the constant matches the documented 450 MB. If a future
-	// change moves it without updating the docstring, this catches it.
-	const expected int64 = 450 * 1024 * 1024
-	assert.Equal(t, expected, memoryLimitBytes,
-		"memoryLimitBytes must be 450 MB to leave 62 MB headroom on 512 MB Fly.io machine")
-
-	// Invariant 2: the runtime limit is currently set. SetMemoryLimit(-1)
-	// returns the current value without changing it (per stdlib godoc).
-	current := debug.SetMemoryLimit(-1)
-	// Default GOMEMLIMIT is math.MaxInt64 — if init didn't run, the limit
-	// would still be MaxInt64. Assert it's been lowered.
-	assert.Less(t, current, int64(math.MaxInt64),
-		"runtime memory limit must be lowered from default by init()")
-	// And specifically: the limit equals our chosen value (or has been
-	// further overridden by GOMEMLIMIT env, which we accept).
-	if os.Getenv("GOMEMLIMIT") == "" {
-		assert.Equal(t, memoryLimitBytes, current,
-			"with no GOMEMLIMIT env override, runtime limit must equal memoryLimitBytes")
-	}
-}
+// Tests of pure-logic helpers (parseLogLevel, initLogger, memoryLimit)
+// migrated to github.com/algo2go/kite-mcp-bootstrap/bootstrap_test.go
+// as part of the 2026-05-16 bootstrap-relocation. The tests below cover
+// only deploy-repo concerns: build-time version injection and binary
+// behaviour with --version / no-args.
 
 func TestVersionVariables(t *testing.T) {
 	// Package-level variables should have default values when not injected by ldflags.
 	assert.Equal(t, "v0.0.0", MCP_SERVER_VERSION)
 	assert.Equal(t, "dev build", buildString)
-}
-
-// TestParseLogLevel covers the pure parser that initLogger delegates to.
-// Migrated from TestInitLogger_* (7 t.Setenv tests) to a single table-driven
-// parallel test — the env-reading code (initLogger calling os.Getenv) is
-// covered by the one TestInitLogger_EnvIntegration adapter test below;
-// every behaviour branch lives here against string literals.
-func TestParseLogLevel(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		raw  string
-		want slog.Level
-	}{
-		{"empty defaults to info", "", slog.LevelInfo},
-		{"info explicit", "info", slog.LevelInfo},
-		{"debug", "debug", slog.LevelDebug},
-		{"warn", "warn", slog.LevelWarn},
-		{"error", "error", slog.LevelError},
-		{"garbage defaults to info (fail-open)", "garbage", slog.LevelInfo},
-		{"uppercase NOT recognised (fail-open to info)", "DEBUG", slog.LevelInfo},
-		{"whitespace NOT trimmed (current contract)", " info", slog.LevelInfo},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tc.want, parseLogLevel(tc.raw))
-		})
-	}
-}
-
-// TestInitLogger_EnvIntegration is the single adapter test that verifies
-// initLogger reads LOG_LEVEL from the environment and feeds it to
-// parseLogLevel. Behaviour-per-value is covered by TestParseLogLevel above;
-// this test only proves the os.Getenv → parser chain wiring. Cannot run
-// in parallel because t.Setenv mutates process-wide env.
-func TestInitLogger_EnvIntegration(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "debug")
-	logger, logBuffer := initLogger()
-	require.NotNil(t, logger)
-	require.NotNil(t, logBuffer)
-	// Wiring proof: env="debug" → parser returns LevelDebug → logger
-	// enabled at debug. If parseLogLevel were called with the wrong env
-	// value, the assertion below would fail.
-	assert.True(t, logger.Enabled(nil, slog.LevelDebug))
-}
-
-// TestInitLogger_LogBufferCaptures verifies the LogBuffer side-effect of
-// initLogger (separate from level parsing). Doesn't depend on env reading
-// — the level is whatever ambient env says, the test only asserts the
-// buffer captures any log line.
-func TestInitLogger_LogBufferCaptures(t *testing.T) {
-	t.Parallel()
-	logger, logBuffer := initLogger()
-	// Force an info-level write regardless of ambient LOG_LEVEL by using
-	// the lowest level that always fires. If the ambient env set
-	// LOG_LEVEL=error this Info call would be filtered, so emit Error
-	// to be safe across all ambient configurations.
-	logger.Error("test-message-for-buffer")
-	entries := logBuffer.Recent(10)
-	found := false
-	for _, e := range entries {
-		if strings.Contains(e.Message, "test-message-for-buffer") {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "LogBuffer should capture log entries")
 }
 
 func TestBinary_VersionFlag(t *testing.T) {
@@ -148,7 +46,6 @@ func TestBinary_VersionFlag(t *testing.T) {
 		t.Skipf("cannot build binary: %v\n%s", err, buildOut)
 	}
 
-	// Run with --version flag.
 	out, err := exec.Command(binaryPath, "--version").CombinedOutput()
 	require.NoError(t, err, "binary --version should exit 0")
 	output := string(out)
@@ -174,7 +71,6 @@ func TestBinary_ShortVersionFlag(t *testing.T) {
 		t.Skipf("cannot build binary: %v\n%s", err, buildOut)
 	}
 
-	// Run with -v flag (short version).
 	out, err := exec.Command(binaryPath, "-v").CombinedOutput()
 	require.NoError(t, err, "binary -v should exit 0")
 	output := string(out)
@@ -194,7 +90,6 @@ func TestBinary_NoArgsExitsNonZero(t *testing.T) {
 	}
 	binaryPath := filepath.Join(tmpDir, binaryName)
 
-	// Clear env vars so the server fails fast on LoadConfig.
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
@@ -209,6 +104,5 @@ func TestBinary_NoArgsExitsNonZero(t *testing.T) {
 		"OAUTH_JWT_SECRET=",
 	)
 	err = cmd.Run()
-	// Should exit non-zero because LoadConfig fails without required config.
 	assert.Error(t, err, "binary with no config should exit non-zero")
 }

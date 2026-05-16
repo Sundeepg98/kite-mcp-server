@@ -35,7 +35,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zerodha/kite-mcp-server/app/providers"
+	"github.com/algo2go/kite-mcp-bootstrap/app/providers"
 )
 
 func main() {

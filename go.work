@@ -1,79 +1,25 @@
-// Go workspace declaration — multi-module decomposition end state.
+// Go workspace for the THIN kite-mcp-server deploy repo.
 //
-// This is the in-tree mechanism that lets us extract bounded contexts to
-// their own go.mod files without changing import paths and without
-// publishing separate versioned repos. See:
-//   - .research/disintegrate-and-holistic-architecture.md (commit
-//     5437c32) — the prior audit that recommended this exact pattern.
+// Post-bootstrap-relocation (2026-05-16), only the root module remains
+// in this repo. The 3 prior workspace members (app/providers, plugins,
+// testutil) moved to github.com/algo2go/kite-mcp-bootstrap as part of
+// the 49,400-LOC mass-move. See:
+//   - main.go : 35-line entry point delegating to bootstrap.Main
+//   - go.mod  : require + cross-repo replace pointing at
+//               ../algo2go/kite-mcp-bootstrap until tagged + published.
 //
-// CURRENT STATE (post Path A.27 closure + Tier 1 + Tier 2 cleanup):
-//   - 4 in-tree workspace members (root + plugins + testutil +
-//     app/providers)
-//   - 28 algo2go modules external (broker, money, decorators, i18n,
-//     legaldocs, isttz, scheduler, logger, templates, aop, domain,
-//     alerts, users, oauth, billing, watchlist, instruments, registry,
-//     ticker, cqrs, eventsourcing, audit, riskguard, usecases,
-//     papertrading, telegram, sectors, clockport)
-//   - Workspace member count progression: 30 (initial) → 11 (mid-Path-A,
-//     post Path A.20 eventsourcing) → 4 (post Path A.27 clockport
-//     closure). Each Phase B canary deletion removed one workspace
-//     member.
-//
-// PATH A INAUGURATION ARC (commits in git log):
-//   - Path A.1-A.15: first 16 modules promoted (broker through
-//     watchlist; close at v0.1.0).
-//   - Path A.16-A.18: instruments + registry + ticker.
-//   - Path A.19-A.26: cqrs + eventsourcing + audit + riskguard +
-//     usecases + papertrading + telegram + sectors. Path A.26 closed
-//     the kc/* externalization arc — every kc/* subdirectory with its
-//     own go.mod is now external.
-//   - Path A.27: clockport — 28th module. Extends the arc by 1 to
-//     resolve the testutil-misnaming problem (production port
-//     Clock/Ticker/RealClock previously lived inside testutil/clock.go,
-//     forcing kc/fill_watcher.go to import "testutil" for production
-//     code paths). Now external + testutil contains test-fakes only.
-//
-// IN-TREE FACADE DECOMPOSITION (Tier 1 closure-DI sub-track):
-//   - Tier 1.1 brokers (commit 34a32bf): m *Manager → 8 closure pairs
-//   - Tier 1.2 eventing (commit fd4b20e): m *Manager → 16 closure pairs
-//     (handles Wave-D's 8 use-case propagation surface)
-//   - Tier 1.3 scheduling (commit 650f4c3): m *Manager → 4 closure pairs
-//     including 1 closure-with-write-back for sessionManager mutation
-//   Two facades remain on back-pointers (StoreRegistry +
-//   SessionLifecycleService) — explicitly deferred per the Tier 1
-//   design doc (lower architectural leverage; no current pain).
-//
-// IN-TREE COMMAND REGISTRAR EXTRACTION (Tier 2 pure-function sub-track):
-//   - Tier 2.1 reconstitution rename (commit 034bf9b): cosmetic
-//     manager_reconstitution.go → reconstitution.go
-//   - Tier 2.2 OAuth registrar (commit 41b9e90): pure-function
-//     registerOAuthBridgeCommandsOnBus(bus, deps, logger) with
-//     OAuthBridgeRegistrarDeps struct. Lazy AlertDBGetter closure
-//     preserves command-dispatch-time evaluation semantics.
-//   - Tier 2.3 admin registrar (commits 4ed17ae → 08cc719, 6 sub-slices):
-//     6 pure-function registrars across 22 admin commands (AdminUser +
-//     AdminRisk + Alerts + MF + Ticker + NativeAlerts). All deps default
-//     to closure-getters per the Tier 2.2 lesson (preserve laziness).
-//
-// PATTERN PRECEDENT (canonical reference for future module extractions):
-//   - Path A.6 isttz precedent: pure-stdlib leaf, zero algo2go deps,
-//     testify-only test deps. Replicated by sectors (A.26) + clockport
-//     (A.27).
-//   - usecases.RegisterOAuthClientHandlers (in algo2go/kite-mcp-usecases):
-//     pre-existing pure-function registrar pattern. Adopted as the
-//     Tier 2 template.
-//
-// CI: matrix-test per workspace member is the canonical path. The
-// default `go test ./...` from the root still works because workspace
-// mode includes all members. GOWORK=off `go test ./...` exercises the
-// production Docker build path which fetches algo2go modules from
-// GOPROXY directly.
+// Cross-repo workspace inclusion of bootstrap is OPTIONAL during local
+// development — uncomment the `use ../algo2go/kite-mcp-bootstrap` line
+// below to let `go build ./...` from this repo also re-build bootstrap
+// in-tree. The go.mod replace directive alone is enough for the deploy
+// repo; the workspace `use` line is purely for cross-repo IDE integration.
 
 go 1.25.0
 
-use (
-	.
-	./app/providers
-	./plugins
-	./testutil
-)
+use .
+
+// To enable cross-repo workspace mode for local IDE + cross-source jumps:
+// use ../algo2go/kite-mcp-bootstrap
+// use ../algo2go/kite-mcp-bootstrap/app/providers
+// use ../algo2go/kite-mcp-bootstrap/plugins
+// use ../algo2go/kite-mcp-bootstrap/testutil
