@@ -31,7 +31,7 @@ import (
 
     "github.com/mark3labs/mcp-go/mcp"
     "github.com/mark3labs/mcp-go/server"
-    "github.com/zerodha/kite-mcp-server/kc"
+    "github.com/Sundeepg98/kite-mcp-server/kc"
 )
 
 type YourTool struct{}

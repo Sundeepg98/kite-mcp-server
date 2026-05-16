@@ -23,7 +23,7 @@ No CGO required. Cross-compile with `GOOS=linux GOARCH=amd64 go build` etc.
 ## Register on the host
 
 ```go
-import "github.com/zerodha/kite-mcp-server/kc/riskguard"
+import "github.com/Sundeepg98/kite-mcp-server/kc/riskguard"
 
 g := riskguard.NewGuard(logger)
 err := g.RegisterSubprocessCheck(

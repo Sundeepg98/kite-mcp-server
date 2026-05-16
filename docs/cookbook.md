@@ -146,4 +146,4 @@ Give me today's P&L summary, then set an alert to notify me if NIFTY drops 0.5% 
 
 - **Verify your IP whitelist** via the setup widget at `https://kite-mcp-server.fly.dev/dashboard/setup` — the `test_ip_whitelist` tool drives the same check from the chat.
 - **Your dashboard**: `https://kite-mcp-server.fly.dev/dashboard` — portfolio, activity, orders, alerts, and paper trading pages all render server-side.
-- **Bug reports and feature requests**: open an issue at `https://github.com/zerodha/kite-mcp-server`.
+- **Bug reports and feature requests**: open an issue at `https://github.com/Sundeepg98/kite-mcp-server/issues`.

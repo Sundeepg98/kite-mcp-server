@@ -1,6 +1,6 @@
 # Kite MCP Server - Complete Security Audit Findings
 
-**Codebase:** `github.com/zerodha/kite-mcp-server`
+**Codebase:** `github.com/Sundeepg98/kite-mcp-server`
 **Date:** 2026-02-24
 **Base audit:** 27-pass manual analysis (SECURITY_AUDIT_REPORT.md, 181 claimed findings)
 **Scope:** All 47 Go source files

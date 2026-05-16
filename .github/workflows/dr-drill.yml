@@ -22,8 +22,10 @@ jobs:
     name: dr-drill
     runs-on: ubuntu-latest
     # Requires R2 secrets configured at repo level. Skipped on forks
-    # because secrets do not propagate.
-    if: ${{ github.repository == 'algo2go/kite-mcp-server' }}
+    # because secrets do not propagate. Repo expression covers both the
+    # current Sundeepg98/ owner and a future algo2go/ transfer so cron
+    # keeps firing across either ownership state without re-edit.
+    if: ${{ github.repository == 'Sundeepg98/kite-mcp-server' || github.repository == 'algo2go/kite-mcp-server' }}
     steps:
       - uses: actions/checkout@v4
 
