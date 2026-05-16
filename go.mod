@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server
+module github.com/Sundeepg98/kite-mcp-server
 
 go 1.25.0
 

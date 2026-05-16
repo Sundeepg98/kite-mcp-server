@@ -12,7 +12,7 @@ Then say: *"Log me in to Kite. Show my portfolio. Backtest SMA crossover on INFY
 
 Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor, VS Code Copilot, Windsurf — anything MCP-compliant. Complementary to [Zerodha's official read-only MCP](https://mcp.kite.trade) (22 tools, GTT only); this server adds order placement, alerts, paper trading, options Greeks, and analytics.
 
-[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev) [![Tests](https://img.shields.io/badge/Tests-9000+-brightgreen)](https://github.com/algo2go/kite-mcp-server/actions) [![codecov](https://codecov.io/gh/algo2go/kite-mcp-server/branch/master/graph/badge.svg)](https://codecov.io/gh/algo2go/kite-mcp-server) [![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md) [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE) [![CI](https://github.com/algo2go/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/algo2go/kite-mcp-server/actions/workflows/ci.yml)
+[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev) [![Tests](https://img.shields.io/badge/Tests-9000+-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions) [![codecov](https://codecov.io/gh/Sundeepg98/kite-mcp-server/branch/master/graph/badge.svg)](https://codecov.io/gh/Sundeepg98/kite-mcp-server) [![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md) [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE) [![CI](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml)
 
 ## Why trust this
 
@@ -24,8 +24,6 @@ Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor,
 - **CI on every push** — `go build`, `go vet`, `go test -race` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml))
 - **MIT license, open source** — inspect anything. Upstream attribution to Zerodha Tech preserved in [LICENSE](LICENSE)
 - **Threat model**: [THREAT_MODEL.md](THREAT_MODEL.md). Security policy: [SECURITY.md](SECURITY.md)
-
-> Internal architecture journal + per-class deep-dives + fix plans live in the private companion repo [`Sundeepg98/kite-mcp-internal`](https://github.com/Sundeepg98/kite-mcp-internal) — request access for contributor-level architectural context.
 
 ## Quick start
 
@@ -42,7 +40,7 @@ Order-placement tools are gated off on the hosted instance pursuant to NSE/INVG/
 ### Option B — run locally (personal use, full functionality)
 
 ```bash
-git clone https://github.com/algo2go/kite-mcp-server && cd kite-mcp-server
+git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server
 cp .env.example .env               # edit: set OAUTH_JWT_SECRET (required)
 docker compose up -d               # builds Dockerfile.selfhost and starts it
 curl http://localhost:8080/healthz # should return "ok"
@@ -222,7 +220,7 @@ Submission to the [official MCP Registry](https://modelcontextprotocol.info/tool
 
 ## Contributing / funding
 
-- **Issues / PRs** — [github.com/algo2go/kite-mcp-server/issues](https://github.com/algo2go/kite-mcp-server/issues). See [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Issues / PRs** — [github.com/Sundeepg98/kite-mcp-server/issues](https://github.com/Sundeepg98/kite-mcp-server/issues). See [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Built on** — [zerodha/kite-mcp-server](https://github.com/zerodha/kite-mcp-server) (MIT). Huge thanks to Kailash Nadh and the Zerodha team for open-sourcing the foundation.
 - **Development** —
 

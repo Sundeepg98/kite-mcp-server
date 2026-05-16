@@ -23,6 +23,21 @@ Where to find what.
 - **Static egress IP** — `209.71.68.157` (Fly.io bom region). Must
   be whitelisted in Kite developer console per SEBI April-2026 mandate.
 - **Order tag** — All orders tagged `mcp` for SEBI traceability.
+- **Known gap — SEBI MARKET/IOC algo prohibition (April-2026 mandate)** —
+  SEBI's April-2026 framework prohibits MARKET orders and IOC (Immediate-
+  or-Cancel) validity for algorithmic trades. Our RiskGuard surface
+  (`algo2go/kite-mcp-riskguard`) implements 11 pre-trade checks (order-
+  value cap, qty limit, daily count, rate limit, per-second rate,
+  duplicate, daily notional, idempotency key, confirmation, anomaly μ+3σ,
+  off-hours) but does NOT currently block MARKET/IOC orders even when
+  `ENABLE_TRADING=true`. The framework distinguishes "algo trades" from
+  manual user-initiated orders; an MCP-tool-call IS algo-classified under
+  SEBI's definition. Operators running with `ENABLE_TRADING=true` should
+  treat MARKET/IOC as out-of-policy for algo workflows until a 12th
+  RiskGuard check lands. Tracked as a launch blocker for any
+  `ENABLE_TRADING=true` production-algo deployment. Hosted Fly.io
+  deployment runs `ENABLE_TRADING=false` (read-only) per Path 2
+  compliance, so this gap does not affect the hosted instance.
 
 ## Operator responsibilities (self-hosted)
 
