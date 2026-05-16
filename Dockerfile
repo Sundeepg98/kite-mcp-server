@@ -1,21 +1,17 @@
 FROM golang:1.25.8-alpine AS builder
 RUN apk add --no-cache jq
 WORKDIR /app
-# Multi-module workspace setup (see go.work + .research/disintegrate-and-
-# holistic-architecture.md). The root go.mod has `replace` directives
-# pointing each in-tree extracted module at ./<path>, so each
-# extracted-module's go.mod must be present BEFORE `go mod download`
-# runs — otherwise the resolver fails with "open <module>/go.mod: no
-# such file or directory". Pre-stage every manifest before download.
-# Add another COPY line per future module extraction when they get
-# their own go.mod. Note: broker + kc/money were removed from this
-# pre-stage list as of Phase B canary deletion — they are now fetched
-# from algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0
-# via GOPROXY during go mod download instead of being in-tree COPY'd.
+# Post-Sprint-0 thin-shell shape (2026-05-16): the bootstrap module is
+# external at algo2go/kite-mcp-bootstrap v0.1.1, so the prior pre-stage-
+# manifests dance for in-tree workspace sub-modules (app/providers,
+# plugins, testutil) is gone — they live in the bootstrap repo now and
+# are resolved transitively via GOPROXY at v0.1.1 (paired with their
+# sibling tags app/providers/v0.1.1, plugins/v0.1.1, testutil/v0.1.1).
+#
+# v0.1.0 of the bootstrap-family is left published as a documented
+# forward-only artifact (it had broken transitive resolution per Path A's
+# empirical falsification); we pin v0.1.1 in go.mod.
 COPY go.mod go.sum ./
-COPY app/providers/go.mod app/providers/go.sum* app/providers/
-COPY plugins/go.mod plugins/go.sum* plugins/
-COPY testutil/go.mod testutil/go.sum* testutil/
 RUN go mod download
 COPY . .
 # VERSION sourced from server.json (single source of truth for the registry
