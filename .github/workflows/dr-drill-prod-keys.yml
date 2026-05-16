@@ -1,0 +1,81 @@
+name: DR Drill — Prod Keys Decrypt Verification
+
+# Companion to dr-drill.yml (the file-restore drill). This workflow runs
+# scripts/dr-drill-prod-keys.sh which goes further than the file-restore
+# drill: it restores SQLite from the R2 Litestream backup AND verifies the
+# full HKDF→AES-256-GCM key chain works end-to-end by actually DECRYPTING
+# one encrypted row.
+#
+# Failure mode this catches that dr-drill.sh cannot:
+#   - OAUTH_JWT_SECRET rotated in production without re-encrypting columns
+#   - hkdf_salt config row lost during a restore
+#   - Key derivation drift (e.g., HKDF info-string changed but old DB still
+#     using old derivation)
+#
+# Per dead-code-utilization analysis 2026-05-11 §2.5: cmd/dr-decrypt-probe
+# was shipped at 14a215d but never wired to any cron. This workflow closes
+# that gap.
+#
+# GATING: `if: secrets.OAUTH_JWT_SECRET != ''` makes this workflow self-skip
+# when the required production secret is not provisioned at the repo level.
+# Per current memory (2026-05-11), the 6 secrets required by this workflow
+# (OAUTH_JWT_SECRET + 4 Litestream R2 secrets + TELEGRAM_BOT_TOKEN) are
+# unset, so the workflow will skip silently on every monthly fire until the
+# user provisions them. Once provisioned, monthly runs become evidence in
+# the audit trail.
+
+on:
+  schedule:
+    # 1st of each month at 06:00 UTC (11:30 IST). Three hours after
+    # dr-drill.yml (file-restore drill at 03:30 UTC) so a transient R2
+    # issue affects both in the same cycle and is visible in alerting.
+    # Both outside Indian market hours.
+    - cron: '0 6 1 * *'
+  workflow_dispatch: # manual trigger for ad-hoc verification
+
+permissions:
+  contents: read
+
+jobs:
+  dr-drill-prod-keys:
+    name: dr-drill-prod-keys
+    runs-on: ubuntu-latest
+    # Self-skip when production secret is not provisioned at repo level.
+    # `if: secrets.X != ''` evaluates to false when the secret is unset,
+    # so the entire job is skipped (not failed). This keeps the workflow
+    # green on a fresh fork without committing any production-secret hard
+    # dependency. When the operator provisions the secret, the next
+    # monthly cron starts firing the drill end-to-end.
+    if: ${{ github.repository == 'Sundeepg98/kite-mcp-server' && secrets.OAUTH_JWT_SECRET != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Litestream
+        run: |
+          curl -sSL https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin
+          litestream version
+
+      - name: Install sqlite3
+        run: sudo apt-get install -y sqlite3
+
+      - name: Build dr-decrypt-probe
+        run: go build -o /tmp/dr-decrypt-probe ./cmd/dr-decrypt-probe
+
+      - name: Run DR drill (prod keys)
+        env:
+          LITESTREAM_R2_ACCOUNT_ID:     ${{ secrets.LITESTREAM_R2_ACCOUNT_ID }}
+          LITESTREAM_BUCKET:            ${{ secrets.LITESTREAM_BUCKET }}
+          LITESTREAM_ACCESS_KEY_ID:     ${{ secrets.LITESTREAM_ACCESS_KEY_ID }}
+          LITESTREAM_SECRET_ACCESS_KEY: ${{ secrets.LITESTREAM_SECRET_ACCESS_KEY }}
+          OAUTH_JWT_SECRET:             ${{ secrets.OAUTH_JWT_SECRET }}
+          TELEGRAM_BOT_TOKEN:           ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_DR_CHAT_ID:          ${{ secrets.TELEGRAM_DR_CHAT_ID }}
+          PROBE:                        /tmp/dr-decrypt-probe
+        run: bash scripts/dr-drill-prod-keys.sh

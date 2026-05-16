@@ -97,18 +97,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go test -tags=e2e -count=1 -timeout 5m ./mcp/...
 
-      # F7 close: kc/aop is the reflection-AOP package gated behind
-      # //go:build research per ADR-0008 — anti-Go-idiom path
-      # authorised for rubric-score reasons. Excluded from default
-      # `go test ./...` runs (zero production callers anywhere; see
-      # kc/aop/aop.go package godoc for the build-gate rationale).
-      # This matrix entry preserves coverage on a single ubuntu-latest
-      # runner so the package's behaviour is still exercised in CI
-      # without paying the reflection-dispatch overhead on every
-      # production test cycle.
-      - name: Research-tag tests (kc/aop reflection-AOP)
+      # Event-flow snapshot: cmd/event-graph regenerates docs/event-flow.md
+      # from providers.CanonicalPersisterSubscriptions. The snapshot test
+      # fails if a new Subscribe entry was added without running
+      # `go test ./cmd/event-graph -update` to refresh the doc. Without
+      # this gate the doc could drift silently and the CQRS rubric
+      # "domain-event-flow visualization" criterion would regress
+      # unnoticed. Per dead-code-utilization analysis 2026-05-11 §2.5
+      # (deefac1 on bootstrap-relocation branch).
+      - name: Validate event-flow snapshot
         if: matrix.os == 'ubuntu-latest'
-        run: go test -tags=research -count=1 -timeout 2m ./kc/aop/...
+        run: go test -count=1 -timeout 1m ./cmd/event-graph/
 
       - name: Upload coverage artifact
         if: always() && matrix.os == 'ubuntu-latest' && hashFiles('coverage.out') != ''

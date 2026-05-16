@@ -145,18 +145,52 @@ IST Monday — `.github/dependabot.yml`).
       for SEBI. Check the `tool_calls` row count isn't approaching
       tens of millions on SQLite — plan a Postgres migration before
       you get to hundreds of millions. See § 7 for scale signals.
-- [ ] **OAUTH_JWT_SECRET rotation — optional and disruptive.**
-      Rotating invalidates every MCP bearer and dashboard cookie;
-      every user logs back in. Only do this on suspected leak, or
-      per your own rotation policy.
+- [ ] **OAUTH_JWT_SECRET rotation — quarterly cadence.**
+      **Recommended cadence: every 90 days, on the 1st Monday of
+      Jan/Apr/Jul/Oct, ~04:00 IST (low-traffic maintenance window).**
+      Aligns with NIST SP 800-57 Part 1 guidance for symmetric keys
+      protecting authentication tokens. Calendar reminder owns the
+      cadence; rotation itself is the gated activity.
+
+      **Why not "breach-only"?** Breach-only is a defensible stance
+      but requires a robust leak-detection signal we don't currently
+      have (no SIEM integration, no canary tokens, no automated
+      anomaly alerting on the audit table). Quarterly cadence gives
+      the same forward-secrecy benefit with a predictable
+      maintenance cost. Switch to breach-only when leak-detection
+      is wired and proven. **Until then, quarterly is the safer
+      default** — committed to by this playbook.
+
+      **Use Option B (re-encrypt-during-grace) — zero forced
+      re-login.** Procedure (full runbook at
+      `.research/decisions/rotate-key-runbook-2026-05-11.md`):
       ```bash
+      OLD=$(flyctl secrets list -a kite-mcp-server | grep OAUTH_JWT_SECRET | head -1)  # paste current
       NEW=$(openssl rand -hex 32)
+      # Step 1: install PREVIOUS so existing JWTs keep verifying
+      flyctl secrets set OAUTH_JWT_SECRET_PREVIOUS=$OLD -a kite-mcp-server
+      # Step 2: offline re-encrypt all encrypted columns
+      flyctl ssh sftp get /data/alerts.db ./alerts.db
       go build -o rotate-key ./cmd/rotate-key
-      ./rotate-key -db /path/to/alerts.db -old-secret $OLD -new-secret $NEW
+      ./rotate-key -db ./alerts.db -old-secret $OLD -new-secret $NEW
+      flyctl ssh sftp put ./alerts.db /data/alerts.db
+      # Step 3: promote NEW; PREVIOUS keeps grace window alive
       flyctl secrets set OAUTH_JWT_SECRET=$NEW -a kite-mcp-server
+      # Step 4: after 7-day grace window, drop PREVIOUS
+      flyctl secrets unset OAUTH_JWT_SECRET_PREVIOUS -a kite-mcp-server
       ```
-      Machine restarts on secret change. Announce the window ahead
-      of time.
+      The two-secret graceful pattern (`OAUTH_JWT_SECRET_PREVIOUS`)
+      means existing MCP bearers + dashboard cookies keep verifying
+      through the 7-day grace window. **Zero forced re-login** if
+      the runbook is followed end-to-end. (Skipping the grace forces
+      every user to re-authenticate on next request — annoying but
+      not data-loss; the encryption rotation itself is complete.)
+
+      **Breach-triggered supplement**: rotate IMMEDIATELY (skipping
+      the grace window — re-login is acceptable when integrity is
+      uncertain) if any of: leaked-secrets scan hits, unexpected
+      tool calls from foreign egress IP, mysterious DB writes.
+      See § 6 Incident Response.
 
 ## 6. Incident response
 
