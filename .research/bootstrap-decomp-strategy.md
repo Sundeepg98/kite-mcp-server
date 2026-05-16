@@ -1,30 +1,56 @@
 <!-- secret-scan-allow: strategy-research-no-secrets -->
 ---
-title: Bootstrap Decomposition Strategy — consumer-side analysis
-as-of: 2026-05-16
+title: Bootstrap Decomposition Strategy — consumer-side analysis (REV 2)
+as-of: 2026-05-16 (rev 2 — Path A reconciliation pass)
 re-verify-by: 2026-06-16
 master-heads:
-  kite-mcp-server: d3a01ed
-  algo2go/kite-mcp-bootstrap: 8931b33
+  kite-mcp-server: 22c6eb0 (this doc's prior commit)
+  algo2go/kite-mcp-bootstrap: fe5255d (Path A's empirical-mapping doc commit)
 scope: READ-ONLY consumer-side + strategy synthesis; NO code changes
-companion: Path A's bootstrap-internal mapping doc (in flight at write-time; cite-slot reserved §INPUTS row 13)
+companion: `algo2go/kite-mcp-bootstrap/.research/bootstrap-decomp-empirical-mapping.md` (Path A's doc at fe5255d; cited extensively in §3.0)
 methodology: compile-and-grep over both repos, per `feedback_compile_and_run_methodology` + `feedback_verify_before_synthesize`
-budget-used: ~2.5h of 2-4h target
+revision-log:
+  - rev 1 (commit 22c6eb0): Shape A with 6 repos as initial recommendation; flagged cite-slot for Path A's doc
+  - rev 2 (this commit): targeted revision after Path A's empirical doc landed; cycle-empirically-verified; recommendation upgraded to **Shape A\*** (kc/ extraction as Phase 1 prereq); §INPUTS rows 16-23 added for the cycle-probe data
+budget-used: ~3.5h cumulative (rev 1: 2.5h; rev 2: 1h)
 ---
 
-# Bootstrap Decomposition Strategy
+# Bootstrap Decomposition Strategy (REV 2)
 
 **User's framing (verbatim from dispatch)**: *"Bootstrap module (algo2go/kite-mcp-bootstrap) is currently ONE git. Under their standing per-git rule, that means Sprint 5 fan-out (99 tools across 5 disjoint subdirs) can only take ONE agent — ~25h serial vs ~6h parallel. Bootstrap's whole premise was to enable parallel agents; in current form it doesn't. Sprint 5 just exposed this."*
 
-## Headline recommendation
+## Headline recommendation (REV 2 — supersedes rev 1)
 
-**Shape D — Hybrid: extract `mcp/` into its own git as `algo2go/kite-mcp-tools` (single new repo, NOT 5-7); leave `kc/`, `app/`, and the other in-tree workspace members inside bootstrap unchanged.**
+**Shape A\* — sequenced extraction: app/metrics → kc/ → mcp/common+plugin+middleware → 5 tool sub-gits (parallel).**
 
-This unblocks Sprint 5's 5-6 parallel agents (the entire fan-out target lives in `mcp/`) at the cost of ONE new repo + ONE go.mod-bump-cascade hop. The 28-algo2go-leaf precedent and the empirically-confirmed `mcp/{common,plugin}` shared-infra coupling both argue against Shape A/B (per-subdir or per-domain gits) — those would create 5-7 new gits to coordinate when ONE new git solves the parallel-agent problem cleanly.
+Rev 1 of this doc landed Shape A (6 new repos: 5 tool + 1 common-infra) but did NOT address the cycle that arises from extracting any tool subdir while leaving `bootstrap/kc` + `bootstrap/mcp/{common,plugin}` in-place. Path A's empirical mapping doc at `fe5255d` flagged this; my own re-probe (§INPUTS rows 16-23, verified 2026-05-16) confirms the cycle is real:
 
-Shape C (do nothing, accept Sprint 5 serial) is empirically defensible per Path A's revised 20-40h-cumulative estimate (which is "tractable serially") — but defers the parallel-agent benefit indefinitely and is falsifiable: the moment a NEXT mcp-wide refactor surfaces (and there will be one — Pattern D.3 tool-relocation INTO owning algo2go leaves per the `god-object-inventory` end-state), the same per-git-rule bottleneck reasserts. **Pay the one-time decomp cost now to unblock a recurring class of work.**
+```
+bootstrap (mcp/plugin_aliases.go blank-imports trade-tools)
+    → algo2go/kite-mcp-trade-tools
+        → bootstrap/mcp/common (imports bootstrap/kc)
+            → bootstrap/kc (imports bootstrap/app/metrics)
+                → bootstrap   ← CYCLE
+```
 
-Falsifiable claim: if Shape D is executed at the cost stated below (~6-10h agent + ~30min user), then Sprint 5 Phase B drops from ~30h serial to ~6h parallel wall-clock; AND any follow-on mcp-wide refactor benefits identically. If either of those wall-clock numbers fails to materialize on first execution, the recommendation is falsified.
+The cycle break requires extracting kc/ first (which requires extracting app/metrics first, since kc/ imports it). Once kc/ is its own module (`algo2go/kite-mcp-kc`), the tool sub-gits import `kite-mcp-kc` instead of `bootstrap/kc`, and bootstrap's blank-imports flow downward cleanly.
+
+**Revised sequence (Phase 0 through Phase 3)**:
+- **Phase 0**: `app/metrics` → `algo2go/kite-mcp-metrics` (~2h, leaf-only, no deps; 513 LOC)
+- **Phase 1**: `kc/` → `algo2go/kite-mcp-kc` (~4-6h, prerequisite; 18,011 LOC + 160 import sites to rewrite)
+- **Phase 2**: `mcp/{common, plugin, middleware}` → `algo2go/kite-mcp-tools-common` (~3-4h infra hub)
+- **Phase 3 fan-out (parallel-safe)**: 5 tool repos × ~1.5h each = ~7h IF dispatched in parallel under per-git rule; ~7h wall-clock with 5 agents
+
+**Revised total**: ~16-20h agent + ~30min user. ~6h more than rev 1 estimated (rev 1 missed the kc/ + metrics prereqs).
+
+Why this isn't fatal to the ROI calculation: rev 1's §3.2 estimated 60-100h benefit over 12 months from 3-5 Sprint-5-style refactors. Even with the revised cost of ~20h, ROI remains 3-5×. **Shape A\* still wins decisively over Shape C (status quo) AND over rev 1's underspecified Shape A.**
+
+Falsifiable claim (revised): if Shape A* is executed at the cost stated above (~16-20h agent + 30min user), then:
+1. The cycle does not reassert at any phase gate (`go build ./...` exit 0 after each phase)
+2. Sprint 5 Phase B drops from ~30h serial to ≤8h parallel wall-clock when Phase 3 fan-out runs
+3. The next mcp-wide refactor benefits identically without re-incurring Phases 0-2
+
+If any of those fails on first execution, Shape A* is falsified and we revert to Shape C status quo.
 
 ---
 
@@ -47,8 +73,19 @@ Falsifiable claim: if Shape D is executed at the cost stated below (~6-10h agent
 | 13 | Path A's bootstrap-internal mapping doc (the planned companion) | NOT YET LANDED at write-time — cite-slot reserved. Once it lands, this doc's §3 + §5 should cross-reference its per-component coupling matrix. | N/A (in flight) |
 | 14 | kite-mcp-server master = thin shell candidate? In-tree LOC: kc=17,820, app=10,371, mcp=24,358 + plugins/testutil/cmd = 54,504 non-test LOC. Bootstrap-relocation branch is the merge target. | `find kc app mcp plugins testutil cmd -name '*.go' -not -name '*_test.go' \| xargs wc -l` over `D:/Sundeep/projects/kite-mcp-server/` master HEAD `d3a01ed` | 2026-05-16 |
 | 15 | Sprint 5 Pilot F (mcp/ root 12 tools) shipped today at bootstrap HEAD `8931b33` | `git log --oneline -1 8931b33` | 2026-05-16 |
+| 16 | Path A's empirical-mapping doc landed at bootstrap commit `fe5255d` (2026-05-16 15:41 IST) | `git log --oneline -1 fe5255d` + `ls .research/bootstrap-decomp-empirical-mapping.md` in bootstrap repo | 2026-05-16 |
+| 17 | **mcp/common imports bootstrap/kc + bootstrap/kc/ports** (the cycle-pivot) | `grep -h 'bootstrap/kc' mcp/common/*.go \| sort -u` returns both import lines | 2026-05-16 |
+| 18 | mcp/common uses 28 distinct `kc.*` symbols; 23 are interfaces, 2 are concrete structs (`*kc.Manager` 29 refs, `*kc.KiteSessionData` 11 refs), 3 are misc types/functions | `grep -rhoE 'kc\.[A-Z][A-Za-z]+' mcp/common/*.go \| sort \| uniq -c` + per-symbol probe `grep -E "^type X interface" kc/*.go` | 2026-05-16 |
+| 19 | **Interface-narrowing to remove mcp/common→kc/ dep is NOT cheap**: the 23 interfaces' method signatures return kc-concrete types (`*KiteTokenEntry`, `*KiteCredentialEntry`, `*riskguard.Guard`, etc.). Pure-redeclaration is impossible without ALSO relocating those concrete types. | `grep -B 0 -A 3 'type [A-Z][A-Za-z]+Interface interface' kc/*.go` — confirmed return types are kc-internal | 2026-05-16 |
+| 20 | **kc/ imports bootstrap/app/metrics** (5 production files): `kc/config.go`, `kc/manager_struct.go`, `kc/options.go`, `kc/scheduling_service.go`, `kc/ops/handler.go` | `grep -rl 'bootstrap/app/metrics' kc/` + per-file `grep -c 'metrics\.'` | 2026-05-16 |
+| 21 | app/metrics is a pure stdlib leaf (513 LOC, 2 files); zero algo2go imports, zero bootstrap-internal imports | `head -10 app/metrics/metrics.go` shows only stdlib imports | 2026-05-16 |
+| 22 | **Tool2 interface (the Sprint 5 migration target) takes `*ToolHandlerDeps`, NOT `*kc.Manager`** | `grep -B 2 -A 10 'type Tool2 ' mcp/common/tool.go` confirms signature | 2026-05-16 |
+| 23 | **The cycle direction**: `bootstrap/mcp/plugin_aliases.go` blank-imports each tool subdir for init()-registration; if a tool subdir extracts, it imports `bootstrap/{kc,mcp/common,mcp/plugin}` downward AND bootstrap imports it upward = cycle | `grep -n '_ "github\|"github.com/algo2go/kite-mcp-bootstrap/mcp/' mcp/plugin_aliases.go` returns the 7 blank-imports of tool subdirs | 2026-05-16 |
+| 24 | 160 files in bootstrap import `bootstrap/kc` (the LOC-rewrite scope for Phase 1) | `grep -rln '"github.com/algo2go/kite-mcp-bootstrap/kc"' --include='*.go' . \| wc -l` | 2026-05-16 |
 
 > **Methodology footnote per `feedback_compile_and_run_methodology`**: tool count grep over `mcp/` returns 132 (test fixtures included); production-only count via `--include='*.go' \| grep -v _test.go` = 111. Path A's Sprint 5 PREP already corrected for this. All numbers in this doc use the non-test grep filter and were re-verified at write-time.
+
+> **Rev 2 falsification note**: rev 1's §3 recommendation (Shape A as 6 simultaneous new repos) is empirically falsified by §INPUTS row 23 — extracting tool subdirs before kc/ creates a cycle that breaks `go build`. Rev 2's Shape A* (phased extraction) is the corrected recommendation.
 
 ---
 
@@ -161,7 +198,7 @@ Path A's PREP doc already established Sprint 5 IS tractable serially (revised es
 
 **When this is the right answer**: if Sprint 5 is the LAST mcp-wide refactor for the foreseeable future. If Pattern D.3 (or any other mcp-cross-cutting refactor) is on the roadmap, Shape C defers the problem rather than solving it.
 
-### Shape D — Hybrid: extract ONLY mcp/ as ONE new git (RECOMMENDED)
+### Shape D — Hybrid: extract ONLY mcp/ as ONE new git (rev 1's INITIAL leaning; rev 2 rejects in §3.0)
 
 Create ONE new repo `algo2go/kite-mcp-tools` containing the ENTIRE `mcp/` tree (subdirs + root files + common + plugin + middleware). Bootstrap retains `kc/`, `app/`, `plugins/`, `testutil/`.
 
@@ -192,7 +229,7 @@ D.1 is essentially Shape A in disguise (relaxing per-git rule with care). D.2 do
 
 ---
 
-## §3 — Revising the recommendation in light of §2 finding
+## §3 — Revising the recommendation in light of §2 finding (rev 1 baseline + rev 2 reconciliation)
 
 **The per-git rule is the binding constraint**. Decomposing bootstrap into N gits only helps if you actually dispatch N agents. So the question reframes:
 
@@ -206,59 +243,126 @@ Empirical answer from past dispatches (your prior research files):
 
 **The per-git rule was forged BECAUSE concurrent-edit friction is real in practice, not just in theory.** Decomposing into N gits genuinely changes the calculus: each git's history is independent, push races are impossible across gits, stale-clone bugs are bounded by per-git scope.
 
-So **Shape A IS the correct response** — but only IF the per-git rule is the absolute binding constraint AND the parallel-agent benefit is worth the multi-repo overhead.
+So **Shape A is the correct response** — but only IF the per-git rule is the absolute binding constraint AND the parallel-agent benefit is worth the multi-repo overhead.
 
-### §3.1 Real recommendation: Shape A with `mcp/common` strategy
+### §3.0 Path A reconciliation (REV 2 — added 2026-05-16 post-fe5255d)
 
-**Recommendation: Shape A, executed as 6 new repos**:
+Rev 1 of §3.1 (immediately following this section) proposed extracting all 6 new repos (5 tool + 1 common-infra) effectively simultaneously. **Path A's empirical-mapping doc at `algo2go/kite-mcp-bootstrap/.research/bootstrap-decomp-empirical-mapping.md` commit `fe5255d` exposed a structural cycle that rev 1 did not address.** My own re-probe (§INPUTS rows 17-23, verified 2026-05-16) confirms the cycle.
 
-| New repo | Contents | Tool count | Why |
-|---|---|---|---|
-| `algo2go/kite-mcp-tools-common` | mcp/common + mcp/plugin + mcp/middleware | 0 (infra) | Shared infra; all 5 tool repos import this |
-| `algo2go/kite-mcp-tools-trade` | mcp/trade | 28 | Trade ops + GTT + close_position |
-| `algo2go/kite-mcp-tools-portfolio` | mcp/portfolio + mcp/analytics | 28 | Read-side queries + analytics |
-| `algo2go/kite-mcp-tools-ops` | mcp/admin + mcp/misc | 27 | Admin + session tools |
-| `algo2go/kite-mcp-tools-alerts` | mcp/alerts | 8 | Alert lifecycle |
-| `algo2go/kite-mcp-tools-paper` | mcp/paper | 8 | Paper-trading isolation |
+#### §3.0.1 The cycle, empirically traced
 
-**Total**: 5 tool repos + 1 infra repo = 6 new repos. Plus existing 29 algo2go repos = **35 algo2go repos post-decomp**.
+Path A's finding (their doc §2.5 + §2.3) plus my re-probe yields this dependency graph:
 
-The mcp/ ROOT files (12 tools: market_tools, tax_tools, watchlist_tools, ext_apps widget code) need a home. Two options:
-- Stay in bootstrap as a small remaining `kite-mcp-bootstrap/mcp-root/` package
-- Move into `kite-mcp-tools-portfolio` (market+tax+watchlist are read-side queries) or split: market → `kite-mcp-tools-market` (NEW 7th repo) OR distribute
+```
+bootstrap/mcp/plugin_aliases.go (in package mcp at bootstrap root)
+        │
+        │  blank-imports each tool subdir
+        ▼
+bootstrap/mcp/<sub>              ←─── each subdir imports mcp/common + mcp/plugin
+                                      and most also import bootstrap/kc
+        │
+        ▼
+bootstrap/mcp/common ────────►  bootstrap/kc  ────►  bootstrap/app/metrics
+bootstrap/mcp/plugin ─────────┘                              │
+                                                             │
+            (stdlib only; no further bootstrap-internal deps)
+```
 
-**Recommendation: distribute the 12 root tools across the 5 tool repos by domain** (market data → portfolio, tax → portfolio, watchlist → portfolio, ext_apps widgets → matching domain repo). 12 root tools have already been migrated to Tool2 interface at `8931b33` so they're parallel-ready surface; they need home assignment.
+If we extract any tool subdir to a separate git (say `algo2go/kite-mcp-trade-tools`) while leaving `kc/`, `mcp/common`, and `mcp/plugin` in bootstrap:
 
-### §3.2 The bump-cascade ROI
+- The new repo IMPORTS `bootstrap/{kc, mcp/common, mcp/plugin}` (downward)
+- bootstrap IMPORTS the new repo via `mcp/plugin_aliases.go` blank-import (upward)
+- **That is a Go module cycle. `go build` exit ≠ 0.**
 
-**Before Shape A**: Sprint 5 Phase B fan-out runs serially: 5 agents × ~6h each = ~30h wall-clock IF they could be parallelized but can't. Practically: ~3-5 calendar days at single-agent pace.
+#### §3.0.2 Option 1 (interface narrowing) — empirically infeasible at low cost
 
-**After Shape A**: Sprint 5 Phase B fan-out runs in parallel: 5 agents × ~6h wall-clock = ~6h wall-clock. Plus coordinator phase (~3h sequential) = ~9h end-to-end.
+Path A's framing left open whether interface-narrowing in `mcp/common` could break the dep on `bootstrap/kc`. I probed this directly. §INPUTS row 18: mcp/common references 28 distinct `kc.*` symbols. §INPUTS row 19: 23 of them are pure interfaces, but their METHOD SIGNATURES return kc-internal concrete types (`*KiteTokenEntry`, `*KiteCredentialEntry`, `*riskguard.Guard`, etc.).
 
-**Time saved per Sprint-5-style refactor**: ~20-25h wall-clock per occurrence.
+To redeclare these interfaces in `mcp/common` without importing `kc`, we'd need to ALSO relocate the concrete return-type structs (`KiteTokenEntry`, `KiteCredentialEntry`, etc.) — which means inverting type ownership across the kc/common boundary. That's a deeper refactor than just extracting kc/ as a Go module. **Option 1 is rejected as more expensive than Option 2.**
 
-**Cost paid once**: Shape A decomp = ~10-14h agent + ~30min user.
+#### §3.0.3 Option 2 (extract kc/) — the path forward
 
-**Breakeven**: ONE Sprint-5-style refactor pays back the decomp cost.
+Extracting kc/ as `algo2go/kite-mcp-kc` is mostly mechanical:
+- 18,011 LOC moved (§INPUTS row 8)
+- 160 import sites rewritten (`bootstrap/kc` → `algo2go/kite-mcp-kc`, §INPUTS row 24)
+- BUT: kc/ itself imports `bootstrap/app/metrics` (§INPUTS row 20). So kc/ has its OWN prerequisite: extract `app/metrics` first.
 
-**Number of expected occurrences** (per `god-object-inventory-2026-05-11.md` end-state vision):
-- Sprint 5 itself (Pattern D.2 typed-Deps migration)
+#### §3.0.4 Distinction Path A's doc made explicit, which rev 1 conflated
+
+Path A correctly distinguished:
+- **Internal decomp of kc/** (split the god-struct into sub-packages): genuinely blocked per Sprint 2-4 halts. The god-struct can't be cracked without invasive surgery.
+- **External promotion of kc/** (move the package AS-IS to its own go.mod): mechanically tractable. `git filter-repo --paths kc/` + `go.mod init` + bulk sed. No god-struct surgery needed.
+
+Rev 1 implicitly conflated these and treated kc/ as undecomposable. Path A's framing fixes this: external promotion is the cheap kind. Rev 2 adopts it.
+
+### §3.1 Revised recommendation: Shape A* — phased extraction
+
+**Recommendation: Shape A\*, executed as 4 phases (Phase 0-2 sequential prereqs, Phase 3 parallel-safe)**:
+
+| Phase | New repo | Contents | Why | Cost | Phase parallelism |
+|---|---|---|---|---|---|
+| **0** | `algo2go/kite-mcp-metrics` | app/metrics (513 LOC, 2 files) | kc/ imports it; stdlib-only leaf | ~2h | sequential (single agent) |
+| **1** | `algo2go/kite-mcp-kc` | bootstrap/kc + kc/ops + kc/ports (18,011 LOC) | mcp/common, mcp/plugin, and tool subdirs all import this; cycle pivot | ~4-6h (160 import sites rewritten across bootstrap) | sequential (single agent; ONE big git change) |
+| **2** | `algo2go/kite-mcp-tools-common` | mcp/common + mcp/plugin + mcp/middleware | Shared infra; all 5 tool repos import this | ~3-4h | sequential (single agent; depends on Phase 1) |
+| **3a** | `algo2go/kite-mcp-tools-trade` | mcp/trade | 28 tools | ~1.5h | **parallel agent A** |
+| **3b** | `algo2go/kite-mcp-tools-portfolio` | mcp/portfolio + mcp/analytics + relevant root tools | 28 + ~10 root tools | ~1.5h | **parallel agent B** |
+| **3c** | `algo2go/kite-mcp-tools-ops` | mcp/admin + mcp/misc | 27 tools | ~1.5h | **parallel agent C** |
+| **3d** | `algo2go/kite-mcp-tools-alerts` | mcp/alerts | 8 tools | ~1.5h | **parallel agent D** |
+| **3e** | `algo2go/kite-mcp-tools-paper` | mcp/paper | 8 tools | ~1.5h | **parallel agent E** |
+
+**Total**: 7 new repos (vs rev 1's 6 — adds metrics + kc/ as Phase 0+1 prereqs).
+**Total agent cost**: ~2h + ~6h + ~4h + (~7h parallel wall-clock OR ~7.5h serial) = **~19-21h cumulative, ~13-15h wall-clock with parallel Phase 3**.
+**Plus existing 29 algo2go repos = 36 algo2go repos post-decomp**.
+
+The mcp/ ROOT files (12 tools: market_tools, tax_tools, watchlist_tools, ext_apps widget code) need a home. Per rev 1's analysis they distribute by domain into the 5 tool repos. This is unchanged by rev 2.
+
+### §3.2 Revised bump-cascade ROI
+
+**Before Shape A\***: Sprint 5 Phase B fan-out runs serially under per-git rule: 5 agents × ~6h each = ~30h wall-clock IF parallelized but can't be. Practically: ~3-5 calendar days at single-agent pace.
+
+**After Shape A\***: Sprint 5 Phase B fan-out runs in parallel after Phases 0-2 land: 5 agents × ~6h wall-clock = ~6h wall-clock. Plus coordinator phase (~3h sequential) = ~9h end-to-end.
+
+**Time saved per Sprint-5-style refactor**: ~20-25h wall-clock per occurrence (unchanged from rev 1).
+
+**Revised cost paid once**: Shape A\* decomp = ~19-21h agent + ~30min user (vs rev 1's ~10-14h).
+
+**Revised breakeven**: ONE Sprint-5-style refactor still pays back the decomp cost (20h saved vs 20h spent). Margin is tighter than rev 1 claimed.
+
+**Number of expected occurrences** (per `god-object-inventory-2026-05-11.md` end-state vision; unchanged from rev 1):
+- Sprint 5 itself (Pattern D.2 typed-Deps migration) — IMMEDIATE benefit
 - Pattern D.3 (tool relocation into owning algo2go leaves) — same 5-subdir fan-out
 - Future tool-surface refactors (rate-limit changes, observability instrumentation, etc.) — same fan-out shape
 - Per-domain release cadence (each tool repo can ship independently)
 
-**Estimated total benefit over 12 months**: 3-5 Sprint-5-style refactors × ~20h saved each = 60-100h cumulative.
+**Revised total benefit over 12 months**: 3-5 Sprint-5-style refactors × ~20h saved each = 60-100h cumulative. **Net 12-month ROI under rev 2: +40-80h** (subtracts the higher Phase 0-2 cost from rev 1's projection).
 
-### §3.3 The shared-infra coupling answer
+### §3.3 The shared-infra coupling answer (unchanged)
 
 The empirical finding (verified §INPUTS row 4): every mcp/<sub> imports `mcp/common` + `mcp/plugin`.
 
-**Resolution**: `algo2go/kite-mcp-tools-common` is the shared-infra repo. All 5 tool repos import it. Changes to common bump the 5 tool repos through the standard GOPROXY+go-get cycle.
+**Resolution**: `algo2go/kite-mcp-tools-common` (Phase 2) is the shared-infra repo. All 5 tool repos import it. Changes to common bump the 5 tool repos through the standard GOPROXY+go-get cycle. Bonus: after Phase 2 lands, `mcp/common`+`mcp/plugin`+`mcp/middleware` can release on their own cadence independent of bootstrap.
 
 This IS a real bump-cascade cost: a `common` change touches 5 downstream repos. But:
 - Common changes are RARE (it's stable interface code: NewToolHandler, ArgParser, MarshalResponse, etc.)
 - Common changes that are LARGE often warrant the bump cascade anyway (e.g., adding ToolHandlerDeps in Sprint 5 IS a coordinated cross-cutting change)
 - The 28 algo2go leaves already accept this pattern: `kite-mcp-domain` is shared infra; changes to it propagate to 7 dependent leaves; we've shipped this many times without trouble
+
+### §3.4 What Path A's doc and this doc agree on (rev 2 reconciliation)
+
+- The cycle is real (Path A §2.5; my §INPUTS row 23)
+- kc/ extraction is the cheap prerequisite (NOT internal decomp; AS-IS promotion)
+- app/metrics extraction is kc/'s prerequisite (Path A §2.5 reverse-coupling note; my §INPUTS row 20)
+- mcp/common + mcp/plugin form one infra bundle (Path A §3; my rev 1 §3.1)
+- Sprint 5 Phase B can fan out 5 parallel after Phases 0-2 land
+
+### §3.5 What this doc adds that Path A's doc didn't address
+
+Path A's doc is bootstrap-internal-only (no consumer-side analysis). This doc's contributions:
+- Cost analysis from the consumer side (cumulative + per-phase)
+- ROI calculation against agent-concurrency denominator (per `feedback_decoupling_denominator.md`)
+- Falsifiable claim form (this rev's §headline)
+- Explicit comparison vs Shape B (3-bundle) and Shape D (1 git for mcp/) that Path A did not formalize
+- Confirmation that 23/28 of mcp/common's kc-symbols are interfaces BUT transitively pull concrete types (rules out cheap Option 1)
 
 ---
 
@@ -291,7 +395,15 @@ Per §INPUTS row 8: kc/ = 18,011 non-test LOC. Internal structure:
 - Path A's god-object-inventory roadmap (Phase 4 slice 10) aims to drain kc.Manager's raw fields once the 5 Tier-1 facades fully encapsulate them. This is single-agent work because facade-decomp is structurally sequential.
 - The kc/* services already have a clean Anchor-6-precedent shape for per-service edits, but they don't fan out 5+ wide.
 
-**Verdict**: kc/ is NOT in scope for current parallel-agent demand. **Defer kc/ decomp**. Revisit if/when a kc-wide refactor surfaces (e.g., Pattern D.3 might need a kc/manager change too — TBD).
+**Verdict (REV 2 UPDATE — supersedes rev 1's "Defer")**:
+
+Rev 1 said "defer kc/ decomp" because rev 1 conflated INTERNAL kc/ decomposition (god-struct split, genuinely blocked) with EXTERNAL kc/ promotion (as-is move to its own go.mod, mechanically cheap).
+
+Per Path A's empirical doc §3 + my §3.0.4 reconciliation: **external kc/ promotion is Phase 1 of Shape A\***. It's a prerequisite (the cycle pivot), not optional. 160 import sites get rewritten; kc/'s internal structure stays unchanged.
+
+So:
+- **External kc/ promotion**: IN scope, Phase 1 of Shape A* (~4-6h)
+- **Internal kc/ decomposition** (god-struct split): NOT in scope; still deferred per the Sprint 2-4 halts
 
 ### §4.3 app/ inside bootstrap
 
@@ -408,64 +520,84 @@ Break-even calculation (continued from §3.2): 60-100h benefit / 14h recurring c
 
 ---
 
-## §6 — Recommendation (one shape, defended)
+## §6 — Recommendation (one shape, defended) — REV 2
 
-**Recommendation: Shape A with 6 new repos (5 tool + 1 common), executed AFTER Sprint-0 bootstrap-relocation merge lands.**
+**Recommendation: Shape A\* with 7 new repos (1 metrics + 1 kc + 1 common-infra + 5 tool), executed in 4 phases. Phases 0-2 sequential, Phase 3 parallel-safe.**
 
-### §6.1 Why Shape A wins
+(Supersedes rev 1's Shape A; rev 1 was structurally falsified by the cycle exposed in §3.0.1.)
+
+### §6.1 Why Shape A* wins
 
 Empirical justification:
-1. **Sprint 5 fan-out is real and recurring**. Path A's PREP doc (verified 2026-05-16, commit `7bcb719`) explicitly designs for 5-6 parallel agents in Phase B. The current per-git rule blocks that. Shape A unblocks it.
-2. **28 algo2go leaves prove the multi-repo pattern works at scale**. We already coordinate 29 algo2go repos; 35 is the same operating model with +6 repos.
-3. **The cascade cost (3 → 4 hops) is bounded and automatable**. Per §5.3, standard Go monorepo-lite tooling handles this; no novel infrastructure needed.
-4. **ROI breaks even on ONE Sprint-5-style refactor**. The next 12 months will likely contain 3-5 such refactors (per `god-object-inventory` end-state).
-5. **The mcp/common shared-infra coupling is handled cleanly via a 6th infra repo**, not by collapsing back to a monolith.
+1. **Sprint 5 fan-out is real and recurring**. Path A's PREP doc (verified 2026-05-16, commit `7bcb719`) explicitly designs for 5-6 parallel agents in Phase B. The current per-git rule blocks that. Shape A* unblocks it after Phases 0-2 land.
+2. **28 algo2go leaves prove the multi-repo pattern works at scale**. We already coordinate 29 algo2go repos; 36 is the same operating model with +7 repos.
+3. **The cascade cost is bounded and automatable**. Per §5.3, standard Go monorepo-lite tooling handles this; no novel infrastructure needed. After Phase 1+2, the cascade depth is 4 hops (tool → common → kc → bootstrap → kite-mcp-server) but each is automatable.
+4. **ROI still breaks even on ONE Sprint-5-style refactor** even at the revised ~20h cost. The next 12 months will likely contain 3-5 such refactors.
+5. **The mcp/common shared-infra coupling is handled cleanly via the Phase 2 infra repo**, not by collapsing back to a monolith.
+6. **kc/ extraction is mechanically tractable** as AS-IS module promotion (Path A §3.0.4 distinction). NOT the same as the genuinely-blocked god-struct internal decomp. This is a key clarification rev 1 missed.
 
-### §6.2 Falsifiable claim
+### §6.2 Falsifiable claim (revised)
 
-If Shape A is executed at the cost stated below:
-- ~10-14h agent (decomp execution)
-- ~30min user (gh repo create × 6 + auth checks)
-- ~14h/year recurring (per §5.4)
+If Shape A* is executed at the cost stated below:
+- ~19-21h agent total (~2h Phase 0 + ~4-6h Phase 1 + ~3-4h Phase 2 + ~7-7.5h Phase 3)
+- ~30min user (gh repo create × 7 + auth checks)
+- ~16h/year recurring (incrementally higher than rev 1's ~14h due to 1 additional repo to maintain)
 
-Then BOTH of these MUST hold:
-- Sprint 5 Phase B drops from ~30h serial wall-clock to ≤8h parallel wall-clock (5+ agents fan-out)
-- The next mcp-wide refactor (Pattern D.3 or any other) benefits identically without re-incurring the decomp cost
+Then ALL THREE of these MUST hold:
+1. Each phase's `go build ./...` exits 0 BEFORE the next phase starts (the cycle does not reassert at any phase gate)
+2. Sprint 5 Phase B drops from ~30h serial wall-clock to ≤8h parallel wall-clock once Phase 3 starts (5+ agents fan-out)
+3. The next mcp-wide refactor (Pattern D.3 or any other) benefits identically without re-incurring Phases 0-2
 
-If either fails on first execution, Shape A is falsified and we revert to Shape C status quo.
+If any one fails on first execution, Shape A* is falsified and we revert to Shape C status quo.
 
 ### §6.3 What NOT to do
 
-- **Don't do Shape B (3-bundle gits)**: arbitrary boundaries, future drift risk, parallel benefit is partial (2-cycle vs single-cycle)
-- **Don't do Shape A.1 with N=10 fine-grained**: coordination overhead exceeds benefit
-- **Don't do kc/ or app/ decomp now**: those surfaces aren't parallel-amenable (god-struct + Fx wire + HTTP mux are intrinsically sequential)
-- **Don't do bootstrap-relocation merge AND Shape A in same dispatch window**: too many concurrent rebases. Land merge first, then Shape A.
+- **Don't do Shape A (rev 1's unphased version)**: structurally cyclic. Cannot pass `go build`.
+- **Don't do Shape B (3-bundle gits)**: arbitrary boundaries, future drift risk, parallel benefit is partial (2-cycle vs single-cycle). Also still needs Phases 0+1 prereqs (kc/ + metrics extraction), so the savings vs A* are marginal.
+- **Don't do Shape A.1 with N=10 fine-grained**: coordination overhead exceeds benefit.
+- **Don't do internal decomp of kc/**: the god-struct internal split is genuinely blocked per Sprint 2-4 halts. Shape A*'s Phase 1 is AS-IS external promotion only — no internal surgery.
+- **Don't do app/ decomp now**: Fx wire + HTTP mux are intrinsically sequential. Defer.
+- **Don't do bootstrap-relocation merge AND Shape A\* in same dispatch window**: too many concurrent rebases. Land merge first, then Shape A*.
 
-### §6.4 Decision matrix for user
+### §6.4 Decision matrix for user (REVISED)
 
-| Shape | Decomp cost | Parallel benefit | Recurring cost | Net ROI 12mo |
-|---|---|---|---|---|
-| A (5 tool + 1 infra repo) | ~10-14h + 30min user | 5-6 agents on mcp-fan-out (~24h/yr saved) | +14h/yr | +60-86h/yr |
-| B (3 bundle repos) | ~8-10h + 20min user | 3 agents (~12h/yr saved) | +8h/yr | +24-40h/yr |
-| C (status quo) | 0 | 0 | 0 | 0 (baseline) |
-| D (mcp/ as 1 git) | ~6-10h + 20min user | 0 (binding constraint not solved) | +5h/yr | NEGATIVE (cost without benefit) |
-| Hybrid (defer Shape A until Sprint 5 ships serially) | 0 now; ~10-14h later | 0 for Sprint 5; future refactors gain | same as A | A's ROI minus 1 Sprint-5-cycle savings |
+| Shape | Decomp cost | Parallel benefit | Recurring cost | Net ROI 12mo | Compile-clean? |
+|---|---|---|---|---|---|
+| **A\* (Phased: metrics + kc + common + 5 tool)** | ~19-21h + 30min user | 5-6 agents on mcp-fan-out (~24h/yr saved) | +16h/yr | **+40-80h/yr** | YES (after each phase gate) |
+| A (rev 1's unphased 6 repos) | ~10-14h claimed | Would have been the same | n/a | n/a | **NO — cycle** |
+| B (3 bundle repos, also phased) | ~17-19h + 20min user | 3 agents (~12h/yr saved) | +10h/yr | +20-50h/yr | YES (same phasing required) |
+| C (status quo) | 0 | 0 | 0 | 0 (baseline) | YES |
+| D (mcp/ as 1 git, also phased) | ~14-16h + 20min user | 0 (per-git rule still binds) | +7h/yr | NEGATIVE | YES |
+| Hybrid (defer Shape A\* until Sprint 5 ships serially) | 0 now; ~20h later | 0 for Sprint 5; future refactors gain | same as A* | A*'s ROI minus 1 Sprint-5-cycle savings (~+20-60h/yr) | YES |
 
-**The strictly-dominant strategy is Shape A**. The hybrid (defer Shape A until after Sprint 5) gives up the Sprint 5 savings but keeps the future-refactor savings — defensible if user prefers risk-averse path.
+**The strictly-dominant strategy is Shape A\***. The hybrid (defer A* until after Sprint 5 ships serially) is the conservative alternative — gives up ~20h of Sprint 5 savings but keeps future-refactor savings. Defensible if user prefers risk-averse path through one more Sprint-5-style refactor before paying the decomp cost.
+
+### §6.5 Rev 1 vs Rev 2 delta summary
+
+| Dimension | Rev 1 (commit `22c6eb0`) | Rev 2 (this revision) |
+|---|---|---|
+| Repo count | 6 (5 tool + 1 common) | 7 (1 metrics + 1 kc + 1 common + 5 tool) — net +1 |
+| Decomp cost | ~10-14h + 30min | ~19-21h + 30min — net +6-10h |
+| Phasing | Effectively parallel (incorrect) | 4-phase sequential prereq → parallel only at Phase 3 |
+| Cycle handling | Not addressed | Phase 0+1 + 2 break the cycle empirically |
+| Net 12mo ROI | +60-86h/yr | +40-80h/yr |
+| Falsifiable claim | 2 conditions | 3 conditions (added compile-clean phase-gate condition) |
+| Compile-clean? | NO (rev 1 was structurally falsified) | YES at each phase gate |
+| Distinction internal vs external kc/ decomp | Conflated; called kc/ "not in scope" | Clarified per Path A: external promotion is cheap, internal decomp stays blocked |
 
 ---
 
-## §7 — What this doc does NOT recommend (per dispatch instruction)
+## §7 — What this doc does NOT recommend (per original dispatch instruction)
 
-Per dispatch: "Don't recommend execution sequencing yet — that comes after the user picks a shape based on both your doc + Path A's doc."
+Per the rev-1 dispatch: "Don't recommend execution sequencing yet — that comes after the user picks a shape based on both your doc + Path A's doc."
 
-So this doc names **A** as the recommendation but does NOT specify:
+So this doc names **A\*** as the recommendation but does NOT specify:
 - WHEN to execute (now vs after Sprint-0 merge vs after Sprint 5 ships)
-- WHICH agent dispatches the decomp (single coordinator vs multi-agent for repo creation)
-- WHO owns each of the 6 new repos for maintenance
-- Per-repo naming finalization (the §3.1 names are provisional)
+- WHICH agent dispatches each phase (single coordinator vs multi-agent at Phase 3 only)
+- WHO owns each of the 7 new repos for maintenance
+- Per-repo naming finalization (the §3.1 names are still provisional)
 
-Those decisions await user choice between Shape A vs Shape B vs Shape C vs A-deferred, informed by Path A's bootstrap-internal mapping doc (when it lands).
+Those decisions await explicit user authorization. The rev 2 falsification of rev 1's Shape A means the cost numbers have moved (now ~20h, not ~12h); user may want to re-validate the breakeven assumption before committing.
 
 ---
 
@@ -499,4 +631,4 @@ grep -rhE 'mcp\.NewTool\("' mcp/ --include='*.go' | grep -v _test.go | wc -l   #
 
 ---
 
-**END OF DOC** — verified at kite-mcp-server `d3a01ed` + bootstrap `8931b33`; probes 2026-05-16. Companion: Path A's bootstrap-internal mapping doc (cite-slot §INPUTS row 13; not yet landed).
+**END OF DOC (REV 2)** — verified at kite-mcp-server `22c6eb0` + bootstrap `fe5255d`; cycle re-probes 2026-05-16. Companion: Path A's bootstrap-internal mapping doc at `algo2go/kite-mcp-bootstrap/.research/bootstrap-decomp-empirical-mapping.md` commit `fe5255d` (cited extensively in §3.0). Rev 1 (commit `22c6eb0`) is superseded by this revision.
