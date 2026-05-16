@@ -1,6 +1,6 @@
 # Launch Materials: Kite MCP Server
 
-**Last verified 2026-05-11 against `algo2go/kite-mcp-riskguard/guard.go` (RiskGuard caps + check names) + `curl /healthz` (tools count) + master HEAD `1eb3fcd`.** Tightened on this date to correct pre-2026-04 cap values (`Rs 5,00,000/order, 200/day, Rs 10,00,000 notional, 8 checks`) which were obsoleted by commit `7cd7b35`. Current empirical caps per `SystemDefaults` in guard.go: `Rs 50,000/order, 20 orders/day, Rs 2,00,000 daily notional, 11 user-facing pre-trade checks` (17 `RejectionReason` constants total; 11 of which are user-facing pre-trade per README L3 framing).
+**Last verified 2026-05-16 against `algo2go/kite-mcp-riskguard/guard.go` (RiskGuard caps + check names) + `curl /healthz` (tools count = 111) + master HEAD `6750f37`.** Tightened on 2026-05-11 to correct pre-2026-04 cap values (`Rs 5,00,000/order, 200/day, Rs 10,00,000 notional, 8 checks`) which were obsoleted by commit `7cd7b35`. Current empirical caps per `SystemDefaults` in guard.go: `Rs 50,000/order, 20 orders/day, Rs 2,00,000 daily notional, 11 user-facing pre-trade checks` (16 `RejectionReason` constants total; 11 of which are user-facing pre-trade per README L22 framing — `grep -c ^Reason guard.go` verified 2026-05-16).
 
 **IMPORTANT before posting:** Review all factual claims. The agent that drafted this made some unverified claims — specifically around tool counts, test counts, and commit counts. Verify against current state before you post. Notable correction already applied: Kite tokens expire daily at ~6 AM IST, NOT "every 6 hours" as the draft originally said.
 
@@ -132,7 +132,7 @@ Shipping this today after months of work. Real problem: token expiry, fragmented
 10. Confirmation required (default ON — every order needs explicit ACK; blocks silent autonomous-agent execution)
 11. Anomaly μ+3σ (30-day rolling user baseline — catches "user normally places ₹5k orders, suddenly places ₹49k" pattern)
 
-Plus 6 system-rejection reasons (auto-freeze on 3 rejections in 5 min, off-hours block 02:00-06:00 IST, SEBI OTR-band check, exchange circuit-band check, insufficient-margin check, market-closed check). All limits are per-user and configurable in the dashboard.
+Plus 5 system-rejection reasons (auto-freeze on 3 rejections in 5 min, SEBI OTR-band check, exchange circuit-band check, insufficient-margin check, market-closed check) — note: off-hours block 02:00-06:00 IST is already counted in the 11 pre-trade checks above. All limits are per-user and configurable in the dashboard.
 
 **How it works:**
 1. OAuth login (once) — you bring your own Kite Connect app (₹500/mo from Zerodha)
