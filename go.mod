@@ -17,8 +17,8 @@ go 1.25.0
 
 require (
 	github.com/algo2go/kite-mcp-alerts v0.6.0
-	github.com/algo2go/kite-mcp-bootstrap v0.2.1
-	github.com/algo2go/kite-mcp-bootstrap/app/providers v0.2.1
+	github.com/algo2go/kite-mcp-bootstrap v0.3.0
+	github.com/algo2go/kite-mcp-bootstrap/app/providers v0.3.0
 	github.com/stretchr/testify v1.11.1
 	modernc.org/sqlite v1.46.1
 )
@@ -26,6 +26,7 @@ require (
 require (
 	github.com/algo2go/kite-mcp-kc v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-metrics v0.1.0 // indirect
+	github.com/algo2go/kite-mcp-tools-common v0.1.0 // indirect
 )
 
 // NOTE on bootstrap-family versioning (2026-05-16):
@@ -39,15 +40,23 @@ require (
 // second proxy-immutability incident with v0.2.0 (the v0.2.0 tag was
 // first published with stale cross-refs at b33912e; the immutable
 // proxy snapshot can't be re-pointed). v0.1.x and v0.2.0 line stay
-// published as forward-only artifacts; consumers pin v0.2.1+.
+// published as forward-only artifacts.
 //
-// kite-mcp-kc v0.1.0 (NEW indirect at the require block above) is
-// the external module Phase 1 extracted ~55k LOC into; resolved
-// transitively via bootstrap@v0.2.1.
+// 2026-05-16 (Phase 2) — mcp/{common,plugin,middleware} extracted to
+// algo2go/kite-mcp-tools-common v0.1.0 (-10,399 LOC from bootstrap).
+// Bootstrap family bumped to v0.3.0 (minor — Phase 2 architectural
+// milestone; cross-refs updated BEFORE first tag publish per the
+// lesson from the v0.2.0 immutability incident). Consumers pin v0.3.0+.
+//
+// External modules extracted to date (consumed transitively via
+// bootstrap@v0.3.0):
+//   - kite-mcp-metrics v0.1.0       (Phase 0 — Prometheus histograms)
+//   - kite-mcp-kc v0.1.0            (Phase 1 — manager/sessions/ops)
+//   - kite-mcp-tools-common v0.1.0  (Phase 2 — mcp common/plugin/middleware)
 //
 // The local-filesystem replace directives that lived here in the initial
 // Sprint 0 commit (bc76c76) are now removed: GOPROXY resolves the
-// bootstrap-family cleanly at v0.2.1, so the Docker builder's
+// bootstrap-family cleanly at v0.3.0, so the Docker builder's
 // `go mod download` no longer needs the sibling working-tree path.
 
 // The indirect block below carries deps brought in by main + cmd/. It is
@@ -56,7 +65,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/algo2go/kite-mcp-audit v0.2.0 // indirect
 	github.com/algo2go/kite-mcp-billing v0.3.0 // indirect
-	github.com/algo2go/kite-mcp-bootstrap/plugins v0.2.1 // indirect
+	github.com/algo2go/kite-mcp-bootstrap/plugins v0.3.0 // indirect
 	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-clockport v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-cqrs v0.1.0 // indirect
