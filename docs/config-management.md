@@ -211,8 +211,8 @@ The "known-good" state of every configuration surface as of HEAD `3501a11`:
 | `primary_region` | `"bom"` | Mumbai (closest to Kite API + SEBI static-IP whitelist) |
 | `internal_port` | `8080` | Container HTTP port |
 | `force_https` | `true` | TLS-only enforcement at Fly.io edge |
-| `min_machines_running` | `1` | At least one machine always up |
-| `auto_stop_machines` | `false` | Don't suspend (audit chain needs continuity) |
+| `min_machines_running` | `0` | Scale-to-zero for cost; machine wakes on request (~12s cold start) |
+| `auto_stop_machines` | `"stop"` | Suspend when idle; audit chain re-seeds from the DB on boot so continuity does not require always-on |
 | `mounts.source` | `"kite_data"` | Persistent volume for SQLite |
 | `mounts.destination` | `"/data"` | Mount point |
 | `[env].APP_MODE` | `"http"` | HTTP transport (not stdio/SSE) |

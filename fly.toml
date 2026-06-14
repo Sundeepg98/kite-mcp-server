@@ -1,6 +1,12 @@
 app = "kite-mcp-server"
 primary_region = "bom"
 
+# Graceful-shutdown window. Fly's default kill_timeout is 5s, but the app's
+# HTTP drain is 10s and litestream needs a final WAL->R2 sync + the audit
+# async write-buffer must flush on stop. With scale-to-zero, stops are now
+# frequent, so give the clean-shutdown path room before SIGKILL.
+kill_timeout = "15s"
+
 # Secondary region prepared for future activation: "sin" (Singapore).
 # Activation is GATED on adding a non-Kite broker — see
 # docs/operator-playbook.md "Multi-region" and
@@ -23,8 +29,20 @@ primary_region = "bom"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = false
-  min_machines_running = 1
+  # Flipped to scale-to-zero 2026-06-14 (cost): app is ~99% idle (1-3 MB/mo
+  # egress) and cost ~$3/mo always-on. SAFE re: the SEBI IP allow-list because
+  # 209.71.68.157 is a DEDICATED bom egress IP (fly ips list, allocated Apr 1
+  # 2026) that PERSISTS across machine stop/start in-region, so the whitelisted
+  # egress IP does NOT change. (A region change WOULD change it; still gated,
+  # see the region note above.) ENABLE_TRADING=false so the hosted build is
+  # read-only; ~12s cold start on wake (dominated by a synchronous
+  # api.kite.trade instruments.json fetch during boot before the port binds).
+  # Deferred follow-up: make the instruments load async/non-fatal so the cold
+  # start shrinks and a Kite-API hiccup at wake can't crash-loop boot. Residual:
+  # the Fly "stuck-stopped after platform churn" bug class, recoverable via a
+  # manual restart.
+  auto_stop_machines = "stop"
+  min_machines_running = 0
 
   # Compress text responses at the Fly proxy. Saves -15-25% wire bytes
   # on the dashboard / landing / static CSS. Brotli is preferred when

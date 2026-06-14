@@ -639,8 +639,11 @@ The footgun goes away when EITHER of these holds:
 
 1. `flyctl machines clone <bom-machine-id> --region sin -a kite-mcp-server`
 2. Update `fly.toml` to record `secondary_region = "sin"` (still
-   documentation only — Fly's scheduler reads this opportunistically,
-   but `min_machines_running = 1` already keeps both alive).
+   documentation only — Fly's scheduler reads this opportunistically).
+   Note the app runs scale-to-zero (`min_machines_running = 0` /
+   `auto_stop_machines = "stop"`), so an idle machine in either region
+   is stopped and auto-wakes on the next request rather than being kept
+   alive.
 3. Verify post-deploy: `flyctl machines list -a kite-mcp-server`
    should show one machine in each region.
 4. Verify health from each region:

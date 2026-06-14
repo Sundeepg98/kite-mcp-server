@@ -31,8 +31,8 @@ Tiers reference [`data-classification.md`](data-classification.md) §2: T1 = hig
 | Memory | 512 MB | `fly.toml` (default config) |
 | CPU | shared 1 vCPU | Fly.io default for shared-cpu-1x |
 | Volume | persistent, 1 GB | `[mounts]` in `fly.toml` |
-| Auto-stop | disabled | `fly.toml` `auto_stop_machines = false` |
-| Min running | 1 | `fly.toml` `min_machines_running = 1` |
+| Auto-stop | enabled ("stop") | `fly.toml` `auto_stop_machines = "stop"` |
+| Min running | 0 | `fly.toml` `min_machines_running = 0` |
 | Image | Alpine 3.21 + Go 1.25 binary | `Dockerfile` |
 
 ### 1.2 Container processes

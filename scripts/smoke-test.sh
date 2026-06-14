@@ -118,6 +118,16 @@ OAUTH_PR="$TMPDIR/smoke-oauth-pr-$TS.json"
 LANDING_HTML="$TMPDIR/smoke-landing-$TS.html"
 trap 'rm -f "$HEALTH_BODY" "$HEALTH_JSON" "$OAUTH_AS" "$OAUTH_PR" "$LANDING_HTML"' EXIT
 
+# ---------- 0. warm-up: absorb the scale-to-zero cold start ----------
+# The hosted app runs auto_stop_machines="stop" / min_machines_running=0, so an
+# idle machine is stopped and the first request wakes it. Cold start is ~12s
+# (a synchronous api.kite.trade instruments fetch runs before the port binds),
+# which exceeds the 5s per-check timeout below and would make check 1 see 000 —
+# a FALSE outage alert every time the machine was asleep. Fire one tolerant
+# wake request first so the checks that follow hit a warm machine. This does
+# not assert anything; a genuinely down machine still fails check 1.
+curl -sS --max-time 90 --retry 2 --retry-delay 5 --connect-timeout 10 -o /dev/null "$BASE_URL/healthz" 2>/dev/null || true
+
 # ---------- 1. /healthz returns 200 within 5s ----------
 code="$(fetch "$BASE_URL/healthz" "$HEALTH_BODY")"
 if [ "$code" = "200" ] && [ -s "$HEALTH_BODY" ]; then

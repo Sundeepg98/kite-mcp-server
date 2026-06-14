@@ -65,14 +65,28 @@ func TestFlyToml_SecondaryRegionDocumentedNotActivated(t *testing.T) {
 	}
 }
 
-// TestFlyToml_HasMinMachinesRunning ensures the always-on machine
-// directive is present. min_machines_running=1 is the load-bearing
-// guarantee that /healthz returns 200 even with auto-stop disabled
-// elsewhere; PR-A's deep-probe assumes a live machine.
-func TestFlyToml_HasMinMachinesRunning(t *testing.T) {
+// TestFlyToml_ScaleToZeroConfigured pins the scale-to-zero posture
+// (flipped 2026-06-14 for cost). The machine stops when idle and wakes
+// on the next inbound request. This is SAFE because:
+//   - the dedicated bom egress IP (209.71.68.157) persists across
+//     stop/start in-region, so the SEBI Kite allow-list is unaffected;
+//   - the audit hash chain re-seeds its prev-hash from the DB's last
+//     row on every boot (audit SeedChain), so continuity is NOT
+//     uptime-dependent — "always-on for chain continuity" was a false
+//     justification.
+//
+// kill_timeout = "15s" gives the clean-shutdown path room (HTTP drain +
+// litestream final WAL sync + audit write-buffer flush) before SIGKILL,
+// which matters now that stops are frequent.
+func TestFlyToml_ScaleToZeroConfigured(t *testing.T) {
 	t.Parallel()
 	body := readFlyToml(t)
-	assert.Contains(t, body, "min_machines_running = 1")
+	assert.Contains(t, body, "min_machines_running = 0",
+		"scale-to-zero: no machine kept running while idle")
+	assert.Contains(t, body, `auto_stop_machines = "stop"`,
+		"scale-to-zero: idle machine stops (wakes on request)")
+	assert.Contains(t, body, `kill_timeout = "15s"`,
+		"clean-shutdown window for HTTP drain + litestream WAL sync + audit buffer flush before SIGKILL")
 }
 
 // TestFlyToml_EnableTradingFalse pins the Path-2 compliance flag.
